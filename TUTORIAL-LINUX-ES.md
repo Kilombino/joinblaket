@@ -185,8 +185,7 @@ Los bonos se crean con la cartera de Jam (firma 0x21, como todo).
 
 ## Seguridad
 
-- Usa una **frase nueva**, creada en Jam. Nunca una que hayas usado en el
-  Bitcoin "de siempre" (SHA-256).
+- Usa una **frase nueva**, creada en Jam. Nunca una que hayas usado en Spamchain (SHA-256).
 - **Nunca importes** en Jam una cartera de la cadena SHA-256.
 - Mete **cantidades pequeñas** mientras el mercado es joven.
 - El nodo tiene que ser **Bitcoin Knots BLAKE2b**; Jam se niega a arrancar
