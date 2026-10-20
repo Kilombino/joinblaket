@@ -73,6 +73,16 @@ def serve(
     if config_file is not None:
         os.environ["JOINMARKET_CONFIG_FILE"] = str(Path(config_file).expanduser())
 
+    # An explicit --data-dir must also select <data-dir>/config.toml (and every
+    # other data-dir derived path the shared settings use). Without this the
+    # settings fell back to ~/.joinmarket-ng/config.toml, so the daemon could
+    # run with default settings (default RPC URL, mainnet) against the wrong node.
+    if data_dir is not None:
+        os.environ["JOINMARKET_DATA_DIR"] = str(Path(data_dir).expanduser())
+        from jmcore.settings import reset_settings
+
+        reset_settings()
+
     resolved_data_dir = data_dir or get_default_data_dir()
     resolved_data_dir.mkdir(parents=True, exist_ok=True)
 

@@ -68,3 +68,30 @@ def test_generate_self_signed_cert_protects_private_key(tmp_path) -> None:
     assert ssl_dir.stat().st_mode & 0o777 == 0o700
     assert (ssl_dir / "key.pem").stat().st_mode & 0o777 == 0o600
     assert (ssl_dir / "cert.pem").exists()
+
+
+def test_data_dir_selects_its_config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """--data-dir must load <data-dir>/config.toml, not ~/.joinmarket-ng/config.toml."""
+    from jmcore.settings import get_settings, reset_settings
+
+    (tmp_path / "config.toml").write_text(
+        '[bitcoin]\nrpc_url = "http://127.0.0.1:18999"\n', encoding="utf-8"
+    )
+    monkeypatch.delenv("JOINMARKET_DATA_DIR", raising=False)
+    monkeypatch.delenv("JOINMARKET_CONFIG_FILE", raising=False)
+    monkeypatch.setattr("jmcore.process_hardening.harden_current_process", lambda: None)
+    seen: list[str] = []
+    monkeypatch.setattr(
+        "jmwalletd.app.create_app",
+        lambda data_dir: seen.append(get_settings().bitcoin.rpc_url) or object(),
+    )
+    monkeypatch.setattr("uvicorn.run", lambda *_args, **_kwargs: None)
+    try:
+        result = runner.invoke(
+            app, ["--no-tls", "--data-dir", str(tmp_path)], prog_name="jmwalletd"
+        )
+    finally:
+        reset_settings()
+
+    assert result.exit_code == 0, result.output
+    assert seen == ["http://127.0.0.1:18999"]
