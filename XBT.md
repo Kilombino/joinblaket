@@ -94,9 +94,14 @@ and `[tor] control_enabled = false`; see "How this was tested".
   UTXO predates the fork. Hot-wallet bond spends through `sign_input` (and
   `jm-wallet sign-psbt`) use 0x21. A PSBT that requests sighash 0x01 is refused
   by `jm-wallet sign-psbt`; one with no sighash field is signed with 0x21.
-* **jmwalletd, tumbler, orderbook watcher** were not exercised end to end here
-  (they share the patched libraries; the orderbook watcher's example
-  docker-compose no longer lists upstream directories).
+* **jmwalletd + Jam** (web UI, Jam `v2.0.0-beta.4` with a small XBT patch)
+  were exercised end to end on regtest: wallet creation, receive, a 4-party
+  CoinJoin started from Jam (every input signed 0x21,
+  `xbt-test-logs/jam-ui-coinjoin-verify.log`) and starting/stopping the maker.
+  `jmwalletd --data-dir X` now reads `X/config.toml` (upstream read
+  `~/.joinmarket-ng/config.toml`). 36 jmwalletd unit tests still fail because
+  their fixtures assume default directories or `bitcoin_network != network`.
+  The tumbler was not exercised. Packaging plan: `PACKAGING-XBT.md`.
 * **Fees**: with no external sources, a node without fee history falls back to
   1 sat/vB (logged as a warning). Set `fee_rate` explicitly if that matters.
 * The chain check identifies a *BLAKE2b node past the fork*; it does not tell
