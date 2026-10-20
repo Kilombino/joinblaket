@@ -123,7 +123,7 @@ and `[tor] control_enabled = false`; see "How this was tested".
 
 ## Reproducible image
 
-`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.41.0-xbt2` from
+`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.41.0-xbt3` from
 `git archive` of this repository and of the Jam fork (committed files only),
 with every input pinned (base image digest, Debian snapshot, Node.js sha256,
 `pip --require-hashes`, `npm ci` integrity), `SOURCE_DATE_EPOCH` = the time
@@ -139,7 +139,7 @@ OCI=/tmp/b.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
 # both architectures at once (needs QEMU/binfmt for arm64), as published:
 PLATFORM=linux/amd64,linux/arm64 OCI=/tmp/multi.tar xbt-docker/build.sh ../jam-xbt
 # compare with the registry (the digest of the tag's index):
-docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.41.0-xbt2
+docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.41.0-xbt3
 ```
 
 Without `OCI` the image is loaded into Docker and `build.sh` prints its id

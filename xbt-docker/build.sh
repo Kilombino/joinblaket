@@ -18,7 +18,7 @@
 set -eu
 REPO=$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)
 JAM_DIR=${1:-../jam-xbt}
-TAG=${2:-ghcr.io/kilombino/jam-xbt:0.41.0-xbt2}
+TAG=${2:-ghcr.io/kilombino/jam-xbt:0.41.0-xbt3}
 JAM_REF=${JAM_REF:-xbt}
 PLATFORM=${PLATFORM:-linux/amd64}
 BUILDER=${BUILDER:-}
@@ -62,7 +62,7 @@ SOURCE_DATE_EPOCH=$EPOCH docker buildx build --builder "$BUILDER" \
     --build-arg JOINMARKET_BUILD_COMMIT="$JM_COMMIT" \
     --build-arg JOINMARKET_BUILD_REF=xbt \
     --label org.opencontainers.image.revision="$JM_COMMIT" \
-    --label org.opencontainers.image.version=0.41.0-xbt2 \
+    --label org.opencontainers.image.version=0.41.0-xbt3 \
     --label org.kilombino.jam.revision="$JAM_COMMIT" \
     --label org.opencontainers.image.source=https://github.com/Kilombino/joinmarket-ng \
     --output "$output" \
