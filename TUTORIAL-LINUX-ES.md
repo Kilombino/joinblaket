@@ -23,7 +23,7 @@ docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/kilombino/jam-x
 La segunda línea muestra un `sha256:…`. Tiene que ser **igual** a este:
 
 ```
-sha256:PENDIENTE_DE_PUBLICAR
+sha256:3bf7c49107f4bc8e6a6420a470ce0de1c4d0f8a827148354c443c174fbd501f5
 ```
 
 Si no coincide, no sigas.
@@ -31,10 +31,10 @@ Si no coincide, no sigas.
 **Opción B: compilarla tú.** Necesitas `git`.
 
 ```sh
-git clone -b xbt https://github.com/Kilombino/joinmarket-ng.git
-git clone -b xbt https://github.com/Kilombino/jam.git jam-xbt
+git clone -b v0.41.0-xbt1 https://github.com/Kilombino/joinmarket-ng.git
+git clone -b v2.0.0-beta.4-xbt1 https://github.com/Kilombino/jam.git jam-xbt
 cd joinmarket-ng
-xbt-docker/build.sh ../jam-xbt
+JAM_REF=v2.0.0-beta.4-xbt1 xbt-docker/build.sh ../jam-xbt
 ```
 
 Con los mismos commits sale la misma imagen, bit a bit (ver `XBT.md`,
