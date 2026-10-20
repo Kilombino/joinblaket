@@ -77,7 +77,11 @@ Running an XBT directory: `jm-directory-server` with `network = "mainnet"`
 answers only `"xbt"` handshakes. There is no built-in list in the code; the
 Docker image (`xbt-docker/`) defaults to the XBT directory
 `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
-(nick-auth directory id: the same `host:port`).
+(nick-auth directory id: the same `host:port`). The image also makes takers use only makers with a
+fidelity bond: `bondless_makers_allowance = 0`, which in this build removes
+every bondless offer before selection (no fallback; the CoinJoin fails with
+"Not enough makers with a fidelity bond"), plus
+`bondless_require_zero_fee = true` and `minimum_makers = 4`.
 
 Regtest/local testing (no Tor) uses `network = "regtest"`,
 `allow_clearnet_connections = true`, `directory_servers = ["127.0.0.1:PORT"]`
@@ -103,6 +107,11 @@ and `[tor] control_enabled = false`; see "How this was tested".
   `jmwalletd --data-dir X` now reads `X/config.toml` (upstream read
   `~/.joinmarket-ng/config.toml`). The jmwalletd unit-test fixtures were
   adapted (equal networks, explicit test directory); the suite passes.
+  With the image defaults (bonded makers only) a Jam CoinJoin against 4
+  makers holding wallet-derived bonds (P2WSH, locktime 2026-11) succeeded
+  with every input 0x21, the same against 4 bondless makers was refused
+  (`xbt-test-logs/docker-jam-bonds-only.log`), and a bond created from Jam
+  (`timelock/new` + direct-send) was recognized and advertised.
   The tumbler was not exercised. Packaging: `PACKAGING-XBT.md`, image in
   `xbt-docker/`, user tutorial (Spanish) in `TUTORIAL-LINUX-ES.md`.
 * **Fees**: with no external sources, a node without fee history falls back to

@@ -137,20 +137,39 @@ Las monedas necesitan **5 confirmaciones** antes de poder mezclarlas.
    colaborativa**. Mínimo 4 colaboradores.
 4. **Enviar → Confirmar**. Tarda unos minutos; no cierres Jam.
 
+Jam solo mezcla con quien tiene **bono de fidelidad** (ver paso 8). Si no
+hay al menos 4, no envía nada y en **Logs** (abajo) verás
+`Not enough makers with a fidelity bond`: prueba más tarde.
+
 ![Enviar](tutorial-shots/10-enviar-colaborativa.png)
 
 ![CoinJoin en curso](tutorial-shots/12-coinjoin-en-curso.png)
 
 Cuantas más vueltas des (de bote en bote), más privacidad.
 
-## 8. Gana (prestar liquidez)
+## 8. Gana (prestar liquidez): necesitas un bono de fidelidad
 
-**Ganar → Iniciar**. Tus monedas se ofrecen a otros para sus CoinJoins; nunca
-salen de tu cartera. Sin bono de fidelidad la oferta tiene que ser
-**gratis** (los demás no aceptan ofertas sin bono que cobren). Deja Jam
-encendido para participar.
+En XBT los demás **solo eligen a quien tiene un bono de fidelidad**. Sin
+bono, tu oferta nunca se acepta (Jam te lo avisa en **Ganar**).
 
-![Ganar](tutorial-shots/16-ganar-activo.png)
+Un bono es un depósito que **bloquea tus monedas hasta una fecha que tú
+eliges** (siempre el día 1 de un mes). Antes de esa fecha **no se pueden
+mover**, pase lo que pase. Cuanto más metas y más tiempo, más te eligen.
+
+1. **Ganar → Crear bono de fidelidad**.
+2. Elige la **fecha de desbloqueo** (la más cercana posible es el día 1 del
+   mes que viene).
+3. Elige el **bote** y las monedas que van al bono. Jam congela las demás
+   del bote para no mezclarlas.
+4. Revisa, marca **He revisado bien los datos** y confirma. Espera a que la
+   transacción tenga confirmaciones.
+5. **Ganar → Iniciar**. Deja la oferta **gratis** y Jam encendido.
+
+Cuando llegue la fecha, en **Ganar** podrás **desbloquear** el bono (mover
+las monedas a un bote) o **renovarlo**.
+
+Los bonos se crean con la cartera de Jam (firma 0x21, como todo).
+**Bonos desde una cartera hardware o almacenamiento en frío: por ahora no.**
 
 ## Parar, actualizar y copia de seguridad
 

@@ -180,8 +180,12 @@ directorio real con nick-auth verificado.
 1. Directorio XBT: `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
    (servicio `jm-xbt-directory` en start10). Va por defecto en la imagen,
    con `nick_auth_directory_ids` = el mismo `host:port`.
-2. Se mantiene `bondless_require_zero_fee = true`: sin bono, el maker ofrece
-   gratis (Jam: "Oferta gratis", ya es la opción por defecto en Ganar).
+2. Solo makers **con bono de fidelidad**: `bondless_makers_allowance = 0`
+   en la imagen (el código XBT descarta toda oferta sin bono y el CoinJoin
+   falla con "Not enough makers with a fidelity bond" en vez de rellenar
+   con makers sin bono, como hacía upstream) y `bondless_require_zero_fee
+   = true` como segunda barrera. Jam avisa en Ganar de que sin bono no te
+   eligen. Bonos desde cartera hardware / en frío: fuera de alcance.
 3. `minimum_makers` = 4 (por defecto).
 4. Jam en español (opcional, según el navegador o el selector) y el enlace
    de fallos a `https://github.com/Kilombino/joinmarket-ng/issues`.
