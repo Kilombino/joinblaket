@@ -74,8 +74,10 @@ socks_port = 9050
 ```
 
 Running an XBT directory: `jm-directory-server` with `network = "mainnet"`
-answers only `"xbt"` handshakes. Publish its onion to XBT users; there is no
-built-in list.
+answers only `"xbt"` handshakes. There is no built-in list in the code; the
+Docker image (`xbt-docker/`) defaults to the XBT directory
+`f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
+(nick-auth directory id: the same `host:port`).
 
 Regtest/local testing (no Tor) uses `network = "regtest"`,
 `allow_clearnet_connections = true`, `directory_servers = ["127.0.0.1:PORT"]`
@@ -99,9 +101,10 @@ and `[tor] control_enabled = false`; see "How this was tested".
   CoinJoin started from Jam (every input signed 0x21,
   `xbt-test-logs/jam-ui-coinjoin-verify.log`) and starting/stopping the maker.
   `jmwalletd --data-dir X` now reads `X/config.toml` (upstream read
-  `~/.joinmarket-ng/config.toml`). 36 jmwalletd unit tests still fail because
-  their fixtures assume default directories or `bitcoin_network != network`.
-  The tumbler was not exercised. Packaging plan: `PACKAGING-XBT.md`.
+  `~/.joinmarket-ng/config.toml`). The jmwalletd unit-test fixtures were
+  adapted (equal networks, explicit test directory); the suite passes.
+  The tumbler was not exercised. Packaging: `PACKAGING-XBT.md`, image in
+  `xbt-docker/`, user tutorial (Spanish) in `TUTORIAL-LINUX-ES.md`.
 * **Fees**: with no external sources, a node without fee history falls back to
   1 sat/vB (logged as a warning). Set `fee_rate` explicitly if that matters.
 * The chain check identifies a *BLAKE2b node past the fork*; it does not tell

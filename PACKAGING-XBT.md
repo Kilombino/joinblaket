@@ -159,87 +159,44 @@ responde, el log dice `XBT chain check passed` y el watcher ve el directorio.
 - `app_proxy` de Umbrel ya pide la contraseña de Umbrel; Jam pide además la
   de la cartera.
 
-## Decisiones pendientes / problemas abiertos
+## Imagen construida (20 oct 2026)
 
-1. **No existe todavía un directorio XBT público.** Hay que montarlo
-   (`jm-directory-server` con `network = "mainnet"`, onion v3 propia, a ser
-   posible con prefijo vanity con mkp224o como las otras onions de start10) y
-   fijar su dirección en los paquetes.
-2. **Arranque del mercado**: NG por defecto (`bondless_require_zero_fee =
-   true`) descarta a los makers sin fidelity bond que cobran comisión, y Jam
-   solo deja poner comisión si hay bond. Al principio casi nadie tendrá bond:
-   o los makers ofrecen gratis, o el paquete pone
-   `bondless_require_zero_fee = false` (más riesgo de sybil). En la prueba
-   regtest hubo que ponerlo a `false` y `bondless_makers_allowance = 1.0`.
-3. **`minimum_makers`** por defecto 4 (Jam no deja bajar el deslizador de ahí).
-   Con pocos makers en XBT puede hacer falta 2–3; decidir.
-4. Jam guarda la configuración leída de jmwalletd en `sessionStorage`
+`xbt-docker/` (Dockerfile, `entrypoint.sh`, `preflight.py`, `torrc`,
+`build.sh`, `docker-compose.yml`). Sin s6: `tini -g` + un `entrypoint.sh`
+que arranca Tor, comprueba el nodo (`preflight.py`: BLAKE2b y cadena igual a
+la red; si no, no arranca), y lanza el watcher y jmwalletd; si uno muere, el
+contenedor sale y Docker lo reinicia. `build.sh` construye desde `git
+archive` (solo lo commiteado) de los dos repos; Jam entra como contexto
+`jam`. Probado en regtest de punta a punta (CoinJoin desde Jam dentro del
+contenedor, todas las entradas 0x21) y el Tor del contenedor llega al
+directorio real con nick-auth verificado.
+
+## Decisiones tomadas
+
+1. Directorio XBT: `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
+   (servicio `jm-xbt-directory` en start10). Va por defecto en la imagen,
+   con `nick_auth_directory_ids` = el mismo `host:port`.
+2. Se mantiene `bondless_require_zero_fee = true`: sin bono, el maker ofrece
+   gratis (Jam: "Oferta gratis", ya es la opción por defecto en Ganar).
+3. `minimum_makers` = 4 (por defecto).
+4. Jam en español (opcional, según el navegador o el selector) y el enlace
+   de fallos a `https://github.com/Kilombino/joinmarket-ng/issues`.
+5. Tests de jmwalletd adaptados; la suite pasa.
+
+## Problemas abiertos
+
+1. Jam guarda la configuración leída de jmwalletd en `sessionStorage`
    (`jm-config-store`): tras cambiar `config.toml` hay que bloquear y volver
    a entrar (o cerrar la pestaña) para que la vea.
-5. Si el CoinJoin falla, Jam solo dice "Collaborative flow stopped"; el
+2. Si el CoinJoin falla, Jam solo dice "Collaborative flow stopped"; el
    motivo está en Logs (pie de página) o en el log de jmwalletd.
-6. Historial: el depósito aparece dos veces con importe 0 y el CoinJoin se
+3. Historial: el depósito aparece dos veces con importe 0 y el CoinJoin se
    queda en "0 confs" tras minarse (vista del historial de jmwalletd/Jam).
-7. Jam no tiene traducción al español (de, fr, it, pt-BR, ru, zh); para
-   "todos los públicos" convendría añadir `es`.
-8. El botón "I found a bug" y los enlaces de ayuda apuntan a Jam upstream, que
-   no da soporte a XBT.
-9. 36 tests unitarios de jmwalletd fallan porque sus fixtures dan por hecho
-   directorios por defecto o `bitcoin_network ≠ network`; el código real se
-   ha probado de punta a punta. Hay que adaptar los fixtures.
+4. Las variables de entorno mandan sobre `/data/config.toml`: red,
+   directorio y puertos de Tor se cambian con `-e`, no editando el fichero.
+5. Falta: publicar (ghcr, repos), arm64, firma del digest.
 
 ---
 
-## Borrador: tutorial para Linux (para cualquiera)
-
-> **Jam XBT: CoinJoin en Bitcoin BLAKE2b sin consola**
->
-> Necesitas: un ordenador con Linux, Docker instalado y tu nodo Bitcoin
-> Knots BLAKE2b funcionando (con usuario y contraseña RPC).
->
-> **1. Descarga y comprueba**
->
-> Abre una terminal y pega:
->
-> ```
-> docker pull ghcr.io/kilombino/jam-xbt:VERSION
-> docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/kilombino/jam-xbt:VERSION
-> ```
->
-> El número que sale (`sha256:…`) tiene que ser igual al que publicamos en
-> la página de la versión (firmado por Kilombino). Si no coincide, no sigas.
->
-> **2. Arranca**
->
-> Cambia `TU_USUARIO` y `TU_CONTRASEÑA` por los de tu nodo y pega:
->
-> ```
-> docker run -d --name jam-xbt --restart always --network host \
->   -v jam-xbt-datos:/data \
->   -e JMWALLETD_HOST=127.0.0.1 -e JMWALLETD_NO_TLS=false \
->   -e BITCOIN__RPC_URL=http://127.0.0.1:8332 \
->   -e BITCOIN__RPC_USER=TU_USUARIO -e BITCOIN__RPC_PASSWORD=TU_CONTRASEÑA \
->   ghcr.io/kilombino/jam-xbt:VERSION
-> ```
->
-> **3. Abre Jam**
->
-> En el navegador: <https://127.0.0.1:28183>. La primera vez el navegador
-> avisa del certificado: pulsa "Avanzado" → "Continuar". Abajo a la derecha
-> debe poner **Bitcoin BLAKE2b**.
->
-> **4. Todo lo demás, en Jam**
->
-> - *Create new wallet* → nombre y contraseña → **apunta las 12 palabras y
->   la fecha** (sin ellas pierdes los fondos) → márcalas en orden.
-> - *Receive* → envía XBT a esa dirección.
-> - *Send* → elige el bote de origen y el destino, deja activado
->   "collaborative transaction" y pulsa *Send*: eso es un CoinJoin.
-> - *Earn* → *Start*: prestas tus monedas a otros para sus CoinJoins (nunca
->   salen de tu cartera).
->
-> Para parar: `docker stop jam-xbt`. Tus carteras quedan en el volumen
-> `jam-xbt-datos`.
-
-Capturas para el tutorial: `/mnt/datos2/jam-xbt/shots/` (regtest; las
-direcciones empiezan por `bcrt1`, en el paquete real serán `bc1`).
+Tutorial para Linux: `TUTORIAL-LINUX-ES.md` (capturas en `tutorial-shots/`,
+regtest, interfaz en español, palabras de la frase tapadas).
