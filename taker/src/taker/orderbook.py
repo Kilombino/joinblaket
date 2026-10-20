@@ -621,6 +621,26 @@ def weighted_order_choose(
     return selected
 
 
+def exclude_bondless_offers(offers: list[Offer], bondless_makers_allowance: float) -> list[Offer]:
+    """XBT build: with ``bondless_makers_allowance == 0`` no bondless maker is ever chosen.
+
+    Upstream treats the allowance as a per-slot probability and still falls back
+    to bondless (zero-fee) offers when there are too few bonded ones. With an
+    allowance of 0 this build removes every offer without a fidelity bond before
+    selection, so the CoinJoin fails closed ("not enough makers with a fidelity
+    bond") instead of filling the slots with bondless makers.
+    """
+    if bondless_makers_allowance > 0:
+        return offers
+    kept = [o for o in offers if o.fidelity_bond_value > 0]
+    if len(kept) < len(offers):
+        logger.info(
+            f"Excluded {len(offers) - len(kept)} offers without a fidelity bond "
+            "(bondless_makers_allowance = 0)"
+        )
+    return kept
+
+
 def fidelity_bond_weighted_choose(
     offers: list[Offer],
     n: int,
@@ -669,6 +689,9 @@ def fidelity_bond_weighted_choose(
     Returns:
         Selected offers.
     """
+    # XBT build: allowance 0 = bonded makers only, no fallback to bondless ones.
+    offers = exclude_bondless_offers(offers, bondless_makers_allowance)
+
     # --- Pre-filter: remove bondless offers charging a fee ---
     if bondless_require_zero_fee:
         filtered: list[Offer] = []
@@ -825,6 +848,8 @@ def choose_orders(
         round_up_cj_fees=round_up_cj_fees,
     )
 
+    eligible = exclude_bondless_offers(eligible, bondless_makers_allowance)
+
     # Dedupe by maker (keep cheapest offer per counterparty)
     deduped_by_maker = dedupe_offers_by_maker(eligible, cj_amount, round_up_cj_fees)
 
@@ -837,9 +862,16 @@ def choose_orders(
     deduped = prefer_offers_with_confirmed_features(deduped, n, required_features)
 
     if len(deduped) < n:
-        logger.warning(
-            f"Not enough makers: need {n}, found {len(deduped)} (from {len(offers)} total offers)"
-        )
+        if bondless_makers_allowance <= 0:
+            logger.warning(
+                f"Not enough makers with a fidelity bond: need {n}, found {len(deduped)} "
+                f"(from {len(offers)} total offers; makers without a bond are not used)"
+            )
+        else:
+            logger.warning(
+                f"Not enough makers: need {n}, found {len(deduped)} "
+                f"(from {len(offers)} total offers)"
+            )
         n = len(deduped)
 
     # Select makers
@@ -946,6 +978,8 @@ def choose_sweep_orders(
         round_up_cj_fees=round_up_cj_fees,
     )
 
+    eligible = exclude_bondless_offers(eligible, bondless_makers_allowance)
+
     # Dedupe by maker
     deduped_by_maker = dedupe_offers_by_maker(eligible, estimated_cj_amount, round_up_cj_fees)
 
@@ -971,7 +1005,8 @@ def choose_sweep_orders(
 
     if len(deduped) < n:
         logger.warning(
-            f"Not enough makers for sweep: need {n}, found {len(deduped)} "
+            f"Not enough makers{' with a fidelity bond' if bondless_makers_allowance <= 0 else ''}"
+            f" for sweep: need {n}, found {len(deduped)} "
             f"(filtered from {len(offers)} total offers)"
         )
         # Can't proceed if we don't have at least 1 maker (minimum for a CoinJoin)

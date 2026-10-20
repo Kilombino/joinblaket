@@ -2490,3 +2490,71 @@ class TestPreferOffersWithConfirmedFeatures:
                 required_features={"neutrino_compat"},
             )
             assert set(result) == {"J5confirmed1OOOO", "J5confirmed2OOOO"}
+
+
+class TestXbtBondedMakersOnly:
+    """XBT build: bondless_makers_allowance = 0 never selects a bondless maker."""
+
+    @staticmethod
+    def _offer(nick: str, bond: int, cjfee: str = "0") -> Offer:
+        return Offer(
+            counterparty=nick,
+            oid=0,
+            ordertype=OfferType.SW0_RELATIVE,
+            minsize=1000,
+            maxsize=10_000_000,
+            txfee=0,
+            cjfee=cjfee,
+            fidelity_bond_value=bond,
+        )
+
+    def _mixed(self, bonded: int, bondless: int) -> list[Offer]:
+        return [self._offer(f"J5bonded{i}XXXXXXX", 100_000) for i in range(bonded)] + [
+            self._offer(f"J5bondless{i}XXXXX", 0) for i in range(bondless)
+        ]
+
+    def test_choose_fn_has_no_bondless_fallback(self) -> None:
+        # Fewer bonded offers than slots: upstream fills with zero-fee bondless ones.
+        selected = fidelity_bond_weighted_choose(
+            offers=self._mixed(2, 5), n=4, bondless_makers_allowance=0.0
+        )
+        assert len(selected) == 2
+        assert all(o.fidelity_bond_value > 0 for o in selected)
+
+    def test_choose_orders_only_bonded(self) -> None:
+        result, _fee = choose_orders(
+            offers=self._mixed(5, 5),
+            cj_amount=100_000,
+            n=4,
+            max_cj_fee=MaxCjFee(abs_fee=10_000, rel_fee="0.01"),
+            bondless_makers_allowance=0.0,
+        )
+        assert len(result) == 4
+        assert all(o.fidelity_bond_value > 0 for o in result.values())
+
+    def test_only_bondless_makers_selects_nobody(self) -> None:
+        result, _fee = choose_orders(
+            offers=self._mixed(0, 6),
+            cj_amount=100_000,
+            n=4,
+            max_cj_fee=MaxCjFee(abs_fee=10_000, rel_fee="0.01"),
+            bondless_makers_allowance=0.0,
+        )
+        assert result == {}
+
+    def test_sweep_only_bondless_makers_selects_nobody(self) -> None:
+        result, _amount, _fee = choose_sweep_orders(
+            offers=self._mixed(0, 6),
+            total_input_value=1_000_000,
+            my_txfee=1_000,
+            n=4,
+            max_cj_fee=MaxCjFee(abs_fee=10_000, rel_fee="0.01"),
+            bondless_makers_allowance=0.0,
+        )
+        assert result == {}
+
+    def test_positive_allowance_unchanged(self) -> None:
+        selected = fidelity_bond_weighted_choose(
+            offers=self._mixed(2, 5), n=4, bondless_makers_allowance=0.05
+        )
+        assert len(selected) == 4

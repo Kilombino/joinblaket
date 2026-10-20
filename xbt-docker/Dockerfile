@@ -141,6 +141,9 @@ RUN chmod 0755 /etc/jm-xbt /usr/local/lib/jm-xbt \
 # listener stay on 127.0.0.1 inside the container. Run it on a normal bridge
 # network, never with --network host.
 # Nick authentication: require_verified, our directory supports JMP-0005.
+# Takers use only makers WITH a fidelity bond (allowance 0 = no bondless
+# maker is ever chosen, the CoinJoin fails with "Not enough makers with a
+# fidelity bond" instead); zero-fee rule kept as a second guard.
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HOME=/data \
@@ -159,7 +162,10 @@ ENV PATH="/opt/venv/bin:$PATH" \
     ORDERBOOK_WATCHER__HTTP_HOST=127.0.0.1 \
     ORDERBOOK_WATCHER__HTTP_PORT=28184 \
     OBWATCH_URL=http://127.0.0.1:28184 \
-    MAKER__ONION_SERVING_HOST=127.0.0.1
+    MAKER__ONION_SERVING_HOST=127.0.0.1 \
+    TAKER__BONDLESS_MAKERS_ALLOWANCE=0 \
+    TAKER__BONDLESS_REQUIRE_ZERO_FEE=true \
+    TAKER__MINIMUM_MAKERS=4
 
 USER 1000:1000
 WORKDIR /data

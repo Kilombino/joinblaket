@@ -1025,6 +1025,17 @@ class Taker(TakerMonitoringMixin):
         self.state = TakerState.FAILED
         return False
 
+    def _not_enough_makers_reason(self, found: int, sweep: bool) -> str:
+        """Failure reason when too few makers were selected (XBT: says when bonds are required)."""
+        need = self.config.minimum_makers
+        if self.config.bondless_makers_allowance <= 0:
+            return (
+                f"Not enough makers with a fidelity bond: found {found}, need {need} "
+                "(makers without a fidelity bond are not used)"
+            )
+        kind = "for sweep" if sweep else "selected"
+        return f"Not enough makers {kind}: {found} (need {need})"
+
     def _log_initial_maker_fee_plan(self, fee_plan: dict[str, int]) -> None:
         """Explain the opt-in fee equalization policy before makers are contacted."""
         if not self.config.equalize_cj_fees or not fee_plan:
@@ -1360,7 +1371,7 @@ class Taker(TakerMonitoringMixin):
                 )
 
                 if len(selected_offers) < self.config.minimum_makers:
-                    reason = f"Not enough makers for sweep: {len(selected_offers)}"
+                    reason = self._not_enough_makers_reason(len(selected_offers), sweep=True)
                     logger.error(reason)
                     self._session.last_failure_reason = reason
                     self.state = TakerState.FAILED
@@ -1385,7 +1396,7 @@ class Taker(TakerMonitoringMixin):
                 )
 
                 if len(selected_offers) < self.config.minimum_makers:
-                    reason = f"Not enough makers selected: {len(selected_offers)}"
+                    reason = self._not_enough_makers_reason(len(selected_offers), sweep=False)
                     logger.error(reason)
                     self._session.last_failure_reason = reason
                     self.state = TakerState.FAILED
