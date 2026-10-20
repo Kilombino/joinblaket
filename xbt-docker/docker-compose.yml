@@ -1,0 +1,18 @@
+# JoinMarket-NG XBT + Jam (Linux). Edit the three RPC lines, then:
+#   docker compose up -d      and open https://localhost:28183
+services:
+  jam-xbt:
+    image: jm-xbt:0.41.0-xbt1          # when published: ghcr.io/kilombino/jam-xbt@sha256:<digest>
+    container_name: jam-xbt
+    network_mode: host                 # reaches the node at 127.0.0.1; Jam only on 127.0.0.1:28183
+    restart: always
+    stop_grace_period: 1m              # let a running CoinJoin finish cleanly
+    environment:
+      BITCOIN_RPC_URL: http://127.0.0.1:8332   # your Bitcoin Knots BLAKE2b node
+      BITCOIN_RPC_USER: change-me
+      BITCOIN_RPC_PASS: change-me
+    volumes:
+      - jam-xbt-data:/data             # wallets live here: back it up
+
+volumes:
+  jam-xbt-data:

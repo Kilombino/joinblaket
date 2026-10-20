@@ -1,0 +1,8 @@
+# Tor for JoinMarket-NG XBT (inside the container, state under /data/tor)
+DataDirectory /data/tor
+Log notice stdout
+SocksPort 127.0.0.1:28185 IsolateSOCKSAuth
+ControlPort 127.0.0.1:28186
+CookieAuthentication 1
+CookieAuthFile /data/tor/control_auth_cookie
+AvoidDiskWrites 1
