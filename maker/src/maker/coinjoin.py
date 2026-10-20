@@ -682,15 +682,32 @@ class CoinJoinSession:
                 ],
             )
 
+            # XBT: the unified sighash (0x21) commits to the amount and
+            # scriptPubKey of every input, so look each one up on our own node
+            # before the signing boundary. Refuse to sign if any lookup fails:
+            # signing over values we could not check would be signing blind.
+            spent_outputs, lookup_error = await self._lookup_spent_outputs(tx_hex)
+            if spent_outputs is None:
+                logger.warning("Rejecting CoinJoin: could not look up every input")
+                logger.bind(sensitive=True).warning(
+                    f"Rejecting CoinJoin from {self.taker_nick}: {lookup_error}"
+                )
+                self.state = CoinJoinState.FAILED
+                return False, {"error": lookup_error}
+            if active_check is not None and not active_check():
+                return False, {"error": "Session expired before signing"}
+
             # Signing may produce a usable signature before returning or
             # raising. Cross this boundary first so no later failure can make
             # the committed inputs available to a conflicting transaction.
             self.signing_boundary_crossed = True
             self.state = CoinJoinState.SIG_SENT
             if active_check is None:
-                signatures = await self._sign_transaction(tx_hex)
+                signatures = await self._sign_transaction(tx_hex, spent_outputs=spent_outputs)
             else:
-                signatures = await self._sign_transaction(tx_hex, active_check=active_check)
+                signatures = await self._sign_transaction(
+                    tx_hex, spent_outputs=spent_outputs, active_check=active_check
+                )
 
             if active_check is not None and not active_check():
                 return False, {"error": "Session expired during signing"}
@@ -965,10 +982,49 @@ class CoinJoinSession:
                 self.wallet.release_coinjoin_inputs(reserved_outpoints, owner=self.input_lock_owner)
             return {}, "", "", -1
 
+    async def _lookup_spent_outputs(
+        self, tx_hex: str
+    ) -> tuple[list[tuple[int, bytes]] | None, str]:
+        """Amount and scriptPubKey of every input, from our wallet and our node.
+
+        Returns ``(spent_outputs, "")`` or ``(None, reason)``. Our own inputs
+        come from the wallet; every other input is looked up with the backend
+        (``gettxout`` on the descriptor-wallet backend). Any missing, spent or
+        failed lookup is fatal: the unified sighash would otherwise commit to
+        values we never verified.
+        """
+        tx = parse_transaction(tx_hex)
+        if not self.backend.can_lookup_arbitrary_utxos():
+            return None, "XBT build requires a backend that can look up every input"
+        spent: list[tuple[int, bytes]] = []
+        for tx_input in tx.inputs:
+            key = (tx_input.txid, tx_input.vout)
+            own = self.our_utxos.get(key)
+            if own is not None:
+                spent.append((own.value, bytes.fromhex(own.scriptpubkey)))
+                continue
+            try:
+                async with asyncio.timeout(MINER_FEE_PREVOUT_LOOKUP_TIMEOUT_SEC):
+                    utxo = await self.backend.get_utxo(tx_input.txid, tx_input.vout)
+            except Exception as exc:
+                return None, f"Could not look up input {key[0]}:{key[1]}: {exc}"
+            if utxo is None or not utxo.scriptpubkey:
+                return None, f"Input {key[0]}:{key[1]} is spent or unknown to our node"
+            spent.append((utxo.value, bytes.fromhex(utxo.scriptpubkey)))
+        return spent, ""
+
     async def _sign_transaction(
-        self, tx_hex: str, active_check: Callable[[], bool] | None = None
+        self,
+        tx_hex: str,
+        active_check: Callable[[], bool] | None = None,
+        *,
+        spent_outputs: list[tuple[int, bytes]] | None = None,
     ) -> list[str]:
         """Sign our inputs in the transaction.
+
+        ``spent_outputs`` (every input's amount and scriptPubKey, from
+        :meth:`_lookup_spent_outputs`) is required by the XBT unified sighash;
+        without it nothing is signed.
 
         Returns list of base64-encoded signatures in JM format.
         Each signature is: base64(varint(sig_len) + sig + varint(pub_len) + pub)
@@ -1014,7 +1070,7 @@ class CoinJoinSession:
 
                 # Delegate key access and signing to the wallet so private keys
                 # never leave the wallet (issue #518).
-                signed = self.wallet.sign_input(tx, input_index, utxo_info)
+                signed = self.wallet.sign_input(tx, input_index, utxo_info, spent_outputs)
                 signature = signed.signature
                 pubkey_bytes = signed.pubkey
 

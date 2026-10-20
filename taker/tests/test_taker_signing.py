@@ -81,8 +81,8 @@ def taker_utxos(test_master_key: HDKey) -> list[UTXOInfo]:
 def maker_utxos() -> list[dict[str, Any]]:
     """Create test maker UTXOs."""
     return [
-        {"txid": "c" * 64, "vout": 0, "value": 1_200_000},
-        {"txid": "d" * 64, "vout": 2, "value": 800_000},
+        {"txid": "c" * 64, "vout": 0, "value": 1_200_000, "scriptpubkey": "0014" + "cc" * 20},
+        {"txid": "d" * 64, "vout": 2, "value": 800_000, "scriptpubkey": "0014" + "dd" * 20},
     ]
 
 
@@ -125,6 +125,30 @@ def sample_coinjoin_tx_data(
         total_maker_fee=10_000,
         tx_fee=5_000,
     )
+
+
+def _attach_maker_utxos(taker: Any, tx_data: CoinJoinTxData) -> None:
+    """XBT build: makers' inputs as the taker's node lookup records them.
+
+    The unified sighash (0x21) the taker signs with commits to every input's
+    amount and scriptPubKey, so maker sessions must carry them.
+    """
+    from types import SimpleNamespace
+
+    taker._session.maker_sessions = {
+        nick: SimpleNamespace(
+            utxos=[
+                {
+                    "txid": i.txid,
+                    "vout": i.vout,
+                    "value": i.value,
+                    "scriptpubkey": "0014" + "00" * 20,
+                }
+                for i in inputs
+            ]
+        )
+        for nick, inputs in tx_data.maker_inputs.items()
+    }
 
 
 class TestTakerInputIndexMapping:
@@ -200,8 +224,8 @@ class TestTakerSigning:
         # key lookup so tests exercise WalletService.sign_input behavior.
         from jmwallet.wallet.signer import WalletSigningMixin
 
-        wallet.sign_input = lambda tx, idx, utxo: WalletSigningMixin.sign_input(
-            wallet, tx, idx, utxo
+        wallet.sign_input = lambda tx, idx, utxo, spent=None: WalletSigningMixin.sign_input(
+            wallet, tx, idx, utxo, spent
         )
         wallet.renew_coinjoin_inputs = MagicMock(return_value=True)
         return wallet
@@ -350,12 +374,15 @@ class TestTakerSigning:
             tx_bytes, metadata = builder.build_unsigned_tx(sample_coinjoin_tx_data)
             taker._session.unsigned_tx = tx_bytes
             taker._session.tx_metadata = metadata
+            _attach_maker_utxos(taker, sample_coinjoin_tx_data)
 
             real_signer = mock_wallet.sign_input
 
-            def assert_local_signing_boundary(tx: Any, input_index: int, utxo: UTXOInfo) -> Any:
+            def assert_local_signing_boundary(
+                tx: Any, input_index: int, utxo: UTXOInfo, spent: Any = None
+            ) -> Any:
                 assert taker._session.signing_boundary_crossed is True
-                return real_signer(tx, input_index, utxo)
+                return real_signer(tx, input_index, utxo, spent)
 
             mock_wallet.sign_input = MagicMock(side_effect=assert_local_signing_boundary)
 
@@ -410,6 +437,7 @@ class TestTakerSigning:
             tx_bytes, metadata = builder.build_unsigned_tx(sample_coinjoin_tx_data)
             taker._session.unsigned_tx = tx_bytes
             taker._session.tx_metadata = metadata
+            _attach_maker_utxos(taker, sample_coinjoin_tx_data)
 
             signatures = await taker._session._sign_our_inputs()
 
@@ -444,6 +472,7 @@ class TestTakerSigning:
             )
             taker._session.unsigned_tx = tx_bytes
             taker._session.tx_metadata = metadata
+            _attach_maker_utxos(taker, sample_coinjoin_tx_data)
             signer = MagicMock(side_effect=mock_wallet.sign_input)
             mock_wallet.sign_input = signer
             mock_wallet.renew_coinjoin_inputs.return_value = False
@@ -468,12 +497,12 @@ class TestTakerSigning:
         real_signer = mock_wallet.sign_input
         signing_calls = 0
 
-        def fail_after_first_signature(tx, input_index, utxo):
+        def fail_after_first_signature(tx, input_index, utxo, spent=None):
             nonlocal signing_calls
             signing_calls += 1
             if signing_calls == 2:
                 raise RuntimeError("second signer failed")
-            return real_signer(tx, input_index, utxo)
+            return real_signer(tx, input_index, utxo, spent)
 
         mock_wallet.sign_input = MagicMock(side_effect=fail_after_first_signature)
         with patch.object(Taker, "__init__", lambda self, *args, **kwargs: None):
@@ -490,6 +519,7 @@ class TestTakerSigning:
             )
             taker._session.unsigned_tx = tx_bytes
             taker._session.tx_metadata = metadata
+            _attach_maker_utxos(taker, sample_coinjoin_tx_data)
 
             signatures = await taker._session._sign_our_inputs()
             taker.release_input_locks()
@@ -591,19 +621,27 @@ class TestSignatureIntegration:
         assert (taker_txid, 0) in input_index_map
         input_index = input_index_map[(taker_txid, 0)]
 
+        values = {(i.txid, i.vout): i.value for i in sample_coinjoin_tx_data.taker_inputs}
+        for maker_inputs in sample_coinjoin_tx_data.maker_inputs.values():
+            values.update({(i.txid, i.vout): i.value for i in maker_inputs})
+        spent = [
+            (values[(i.txid_le[::-1].hex(), i.vout)], bytes.fromhex("0014" + "00" * 20))
+            for i in tx.inputs
+        ]
         signature = sign_p2wpkh_input(
             tx=tx,
             input_index=input_index,
             script_code=script_code,
             value=1_000_000,
             private_key=key0.private_key,
+            spent_outputs=spent,
         )
 
         witness = create_witness_stack(signature, pubkey_bytes)
 
         # Signature should be valid DER + sighash
         assert len(signature) > 64
-        assert signature[-1] == 1  # SIGHASH_ALL
+        assert signature[-1] == 0x21  # SIGHASH_UNIFIED | SIGHASH_ALL
 
         # Witness stack should have 2 items
         assert len(witness) == 2
@@ -645,8 +683,8 @@ class TestEdgeCases:
         wallet.wallet_fingerprint = "deadbeef"
         from jmwallet.wallet.signer import WalletSigningMixin
 
-        wallet.sign_input = lambda tx, idx, utxo: WalletSigningMixin.sign_input(
-            wallet, tx, idx, utxo
+        wallet.sign_input = lambda tx, idx, utxo, spent=None: WalletSigningMixin.sign_input(
+            wallet, tx, idx, utxo, spent
         )
 
         utxos = [
@@ -897,10 +935,28 @@ class TestPhaseCollectSignaturesCompleteness:
 
         maker_sessions = {
             "maker1": self._make_maker_session(
-                "maker1", offer, [{"txid": "b" * 64, "vout": 0, "value": 1_500_000}]
+                "maker1",
+                offer,
+                [
+                    {
+                        "txid": "b" * 64,
+                        "vout": 0,
+                        "value": 1_500_000,
+                        "scriptpubkey": "0014" + "bb" * 20,
+                    }
+                ],
             ),
             "maker2": self._make_maker_session(
-                "maker2", offer, [{"txid": "c" * 64, "vout": 0, "value": 1_200_000}]
+                "maker2",
+                offer,
+                [
+                    {
+                        "txid": "c" * 64,
+                        "vout": 0,
+                        "value": 1_200_000,
+                        "scriptpubkey": "0014" + "cc" * 20,
+                    }
+                ],
             ),
         }
 
@@ -947,10 +1003,28 @@ class TestPhaseCollectSignaturesCompleteness:
         )
         maker_sessions = {
             "maker1": self._make_maker_session(
-                "maker1", offer, [{"txid": "b" * 64, "vout": 0, "value": 1_500_000}]
+                "maker1",
+                offer,
+                [
+                    {
+                        "txid": "b" * 64,
+                        "vout": 0,
+                        "value": 1_500_000,
+                        "scriptpubkey": "0014" + "bb" * 20,
+                    }
+                ],
             ),
             "maker2": self._make_maker_session(
-                "maker2", offer, [{"txid": "c" * 64, "vout": 0, "value": 1_200_000}]
+                "maker2",
+                offer,
+                [
+                    {
+                        "txid": "c" * 64,
+                        "vout": 0,
+                        "value": 1_200_000,
+                        "scriptpubkey": "0014" + "cc" * 20,
+                    }
+                ],
             ),
         }
         taker = self._build_taker_with_tx(two_maker_tx_data, maker_sessions=maker_sessions)
@@ -998,10 +1072,28 @@ class TestPhaseCollectSignaturesCompleteness:
 
         maker_sessions = {
             "maker1": self._make_maker_session(
-                "maker1", offer, [{"txid": "b" * 64, "vout": 0, "value": 1_500_000}]
+                "maker1",
+                offer,
+                [
+                    {
+                        "txid": "b" * 64,
+                        "vout": 0,
+                        "value": 1_500_000,
+                        "scriptpubkey": "0014" + "bb" * 20,
+                    }
+                ],
             ),
             "maker2": self._make_maker_session(
-                "maker2", offer, [{"txid": "c" * 64, "vout": 0, "value": 1_200_000}]
+                "maker2",
+                offer,
+                [
+                    {
+                        "txid": "c" * 64,
+                        "vout": 0,
+                        "value": 1_200_000,
+                        "scriptpubkey": "0014" + "cc" * 20,
+                    }
+                ],
             ),
         }
         # Override decrypt to return the fake payload
@@ -1055,10 +1147,28 @@ class TestPhaseCollectSignaturesCompleteness:
 
         maker_sessions = {
             "maker1": self._make_maker_session(
-                "maker1", offer, [{"txid": "b" * 64, "vout": 0, "value": 1_500_000}]
+                "maker1",
+                offer,
+                [
+                    {
+                        "txid": "b" * 64,
+                        "vout": 0,
+                        "value": 1_500_000,
+                        "scriptpubkey": "0014" + "bb" * 20,
+                    }
+                ],
             ),
             "maker2": self._make_maker_session(
-                "maker2", offer, [{"txid": "c" * 64, "vout": 0, "value": 1_200_000}]
+                "maker2",
+                offer,
+                [
+                    {
+                        "txid": "c" * 64,
+                        "vout": 0,
+                        "value": 1_200_000,
+                        "scriptpubkey": "0014" + "cc" * 20,
+                    }
+                ],
             ),
         }
 
@@ -1077,7 +1187,9 @@ class TestPhaseCollectSignaturesCompleteness:
             "incorrectly allowed this."
         )
 
-    def _maker1_sig_response(self, tx_bytes: bytes, privkey: Any) -> str:
+    def _maker1_sig_response(
+        self, tx_bytes: bytes, privkey: Any, spent: list[tuple[int, bytes]]
+    ) -> str:
         """Build a valid base64 !sig payload for maker1's input signed by ``privkey``."""
         from jmwallet.wallet.signing import (
             create_p2wpkh_script_code,
@@ -1088,7 +1200,9 @@ class TestPhaseCollectSignaturesCompleteness:
         index_map = {(ti.txid_le[::-1].hex(), ti.vout): idx for idx, ti in enumerate(tx.inputs)}
         idx = index_map[("b" * 64, 0)]
         pub = bytes(privkey.pub)
-        sig = sign_p2wpkh_input(tx, idx, create_p2wpkh_script_code(pub), 1_500_000, privkey)
+        sig = sign_p2wpkh_input(
+            tx, idx, create_p2wpkh_script_code(pub), 1_500_000, privkey, spent_outputs=spent
+        )
         payload = bytes([len(sig)]) + sig + bytes([len(pub)]) + pub
         return base64.b64encode(payload).decode()
 
@@ -1126,11 +1240,23 @@ class TestPhaseCollectSignaturesCompleteness:
                 ],
             ),
             "maker2": self._make_maker_session(
-                "maker2", offer, [{"txid": "c" * 64, "vout": 0, "value": 1_200_000}]
+                "maker2",
+                offer,
+                [
+                    {
+                        "txid": "c" * 64,
+                        "vout": 0,
+                        "value": 1_200_000,
+                        "scriptpubkey": "0014" + "cc" * 20,
+                    }
+                ],
             ),
         }
         taker = self._build_taker_with_tx(two_maker_tx_data, maker_sessions=maker_sessions)
-        sig_b64 = self._maker1_sig_response(taker._session.unsigned_tx, privkey)
+        spent = taker._session._spent_outputs_for(
+            deserialize_transaction(taker._session.unsigned_tx)
+        )
+        sig_b64 = self._maker1_sig_response(taker._session.unsigned_tx, privkey, spent)
         maker_sessions["maker1"].crypto.decrypt = MagicMock(return_value=sig_b64)
         taker.directory_client.wait_for_responses = AsyncMock(
             return_value={"maker1": {"data": [sig_b64]}}
@@ -1152,6 +1278,42 @@ class TestPhaseCollectSignaturesCompleteness:
 
         assert result is False  # maker2 stayed silent
         assert taker._session.maker_sessions["maker1"].responded_sig is True
+
+    @pytest.mark.asyncio
+    async def test_rejects_replayable_sighash_all_maker_signature(
+        self, two_maker_tx_data: CoinJoinTxData
+    ) -> None:
+        """XBT build: a valid BIP-143 SIGHASH_ALL (0x01) maker signature is refused.
+
+        It would be valid on the SHA-256 chain too, making the CoinJoin
+        replayable there; only unified (0x21) signatures are accepted.
+        """
+        from bitcointx.core.key import CKey
+        from jmwallet.wallet.signing import compute_sighash_segwit, create_p2wpkh_script_code
+
+        maker1_key = CKey(b"\x01" * 32)
+        pub = bytes(maker1_key.pub)
+        taker = self._collect_with_maker1(
+            two_maker_tx_data, pubkey_to_p2wpkh_script(pub).hex(), maker1_key
+        )
+        tx = deserialize_transaction(taker._session.unsigned_tx)
+        idx = next(
+            i
+            for i, ti in enumerate(tx.inputs)
+            if (ti.txid_le[::-1].hex(), ti.vout) == ("b" * 64, 0)
+        )
+        digest = compute_sighash_segwit(tx, idx, create_p2wpkh_script_code(pub), 1_500_000, 1)
+        sig = maker1_key.sign(digest, _ecdsa_sig_grind_low_r=False) + b"\x01"
+        sig_b64 = base64.b64encode(bytes([len(sig)]) + sig + bytes([len(pub)]) + pub).decode()
+        taker._session.maker_sessions["maker1"].crypto.decrypt = MagicMock(return_value=sig_b64)
+        taker.directory_client.wait_for_responses = AsyncMock(
+            return_value={"maker1": {"data": [sig_b64]}}
+        )
+
+        result = await taker._session._phase_collect_signatures()
+
+        assert result is False
+        assert "maker1" not in taker._session.maker_sessions
 
     @pytest.mark.asyncio
     async def test_rejects_maker_signature_not_bound_to_its_utxo(
@@ -1203,10 +1365,28 @@ class TestPhaseCollectSignaturesCompleteness:
         )
         maker_sessions = {
             "maker1": self._make_maker_session(
-                "maker1", offer, [{"txid": "b" * 64, "vout": 0, "value": 1_500_000}]
+                "maker1",
+                offer,
+                [
+                    {
+                        "txid": "b" * 64,
+                        "vout": 0,
+                        "value": 1_500_000,
+                        "scriptpubkey": "0014" + "bb" * 20,
+                    }
+                ],
             ),
             "maker2": self._make_maker_session(
-                "maker2", offer, [{"txid": "c" * 64, "vout": 0, "value": 1_200_000}]
+                "maker2",
+                offer,
+                [
+                    {
+                        "txid": "c" * 64,
+                        "vout": 0,
+                        "value": 1_200_000,
+                        "scriptpubkey": "0014" + "cc" * 20,
+                    }
+                ],
             ),
         }
         taker = self._build_taker_with_tx(two_maker_tx_data, maker_sessions=maker_sessions)
@@ -1303,10 +1483,28 @@ class TestPhaseCollectSignaturesCompleteness:
         )
         maker_sessions = {
             "maker1": self._make_maker_session(
-                "maker1", offer, [{"txid": "b" * 64, "vout": 0, "value": 1_500_000}]
+                "maker1",
+                offer,
+                [
+                    {
+                        "txid": "b" * 64,
+                        "vout": 0,
+                        "value": 1_500_000,
+                        "scriptpubkey": "0014" + "bb" * 20,
+                    }
+                ],
             ),
             "maker2": self._make_maker_session(
-                "maker2", offer, [{"txid": "c" * 64, "vout": 0, "value": 1_200_000}]
+                "maker2",
+                offer,
+                [
+                    {
+                        "txid": "c" * 64,
+                        "vout": 0,
+                        "value": 1_200_000,
+                        "scriptpubkey": "0014" + "cc" * 20,
+                    }
+                ],
             ),
         }
         taker = self._build_taker_with_tx(two_maker_tx_data, maker_sessions=maker_sessions)
@@ -1362,10 +1560,28 @@ class TestPhaseCollectSignaturesCompleteness:
         )
         maker_sessions = {
             "maker1": self._make_maker_session(
-                "maker1", offer, [{"txid": "b" * 64, "vout": 0, "value": 1_500_000}]
+                "maker1",
+                offer,
+                [
+                    {
+                        "txid": "b" * 64,
+                        "vout": 0,
+                        "value": 1_500_000,
+                        "scriptpubkey": "0014" + "bb" * 20,
+                    }
+                ],
             ),
             "maker2": self._make_maker_session(
-                "maker2", offer, [{"txid": "c" * 64, "vout": 0, "value": 1_200_000}]
+                "maker2",
+                offer,
+                [
+                    {
+                        "txid": "c" * 64,
+                        "vout": 0,
+                        "value": 1_200_000,
+                        "scriptpubkey": "0014" + "cc" * 20,
+                    }
+                ],
             ),
         }
         taker = self._build_taker_with_tx(two_maker_tx_data, maker_sessions=maker_sessions)

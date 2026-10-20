@@ -1589,12 +1589,21 @@ async def test_signing_failure_crosses_lock_retention_boundary():
     tx_hex = _maker_signing_tx(session)
     with (
         patch("maker.coinjoin.verify_unsigned_transaction", return_value=(True, "")),
+        patch.object(session, "_lookup_spent_outputs", new=AsyncMock(return_value=(XBT_SPENT, ""))),
         patch.object(session, "_sign_transaction", new=AsyncMock(return_value=[])),
     ):
         success, _ = await session.handle_tx(tx_hex)
 
     assert success is False
     assert session.state == CoinJoinState.SIG_SENT
+
+
+# XBT build: (amount, scriptPubKey) of both inputs of _maker_signing_tx, as the
+# maker's own node lookup would return them for the unified sighash.
+XBT_SPENT = [
+    (10_000, bytes.fromhex("0014" + "aa" * 20)),
+    (10_000, bytes.fromhex("0014" + "bb" * 20)),
+]
 
 
 def _fee_policy_tx(output_value: int) -> str:
@@ -1772,7 +1781,7 @@ async def test_maker_minimum_fee_policy_skips_backend_lookup_failure():
         backend=backend,
         minimum_fee_rate_sat_vb=2.0,
     )
-    session.our_utxos = {("aa" * 32, 0): MagicMock(value=10_000)}
+    session.our_utxos = {("aa" * 32, 0): MagicMock(value=10_000, scriptpubkey="0014" + "aa" * 20)}
     session.state = CoinJoinState.IOAUTH_SENT
     session.wallet.network = "regtest"
     session.wallet.renew_coinjoin_inputs.return_value = True
@@ -1784,14 +1793,17 @@ async def test_maker_minimum_fee_policy_skips_backend_lookup_failure():
         patch("maker.coinjoin.verify_unsigned_transaction", return_value=(True, "")),
         patch.object(session, "_sign_transaction", new=signed),
     ):
-        success, _ = await session.handle_tx(tx_hex)
+        success, error = await session.handle_tx(tx_hex)
 
-    assert success is True
-    signed.assert_awaited_once()
-    assert "Skipping minimum miner-fee verification" in mock_logger.warning.call_args.args[0]
-    sensitive_warning = mock_logger.bind.return_value.warning
-    assert f"{'bb' * 32}:1" in sensitive_warning.call_args.args[1]
-    assert "RPC busy" in sensitive_warning.call_args.args[1]
+    # The fee-floor check itself is still best effort...
+    warnings = [c.args[0] for c in mock_logger.warning.call_args_list]
+    assert any("Skipping minimum miner-fee verification" in w for w in warnings)
+    # ...but the XBT build then refuses to sign: the unified sighash needs every
+    # input's amount and scriptPubKey from our own node.
+    assert success is False
+    signed.assert_not_awaited()
+    assert "Could not look up input" in error["error"]
+    assert "RPC busy" in error["error"]
 
 
 @pytest.mark.asyncio
@@ -2009,13 +2021,14 @@ async def test_valid_input_owner_is_renewed_before_signing(tmp_path):
 
     with (
         patch("maker.coinjoin.verify_unsigned_transaction", return_value=(True, "")),
+        patch.object(session, "_lookup_spent_outputs", new=AsyncMock(return_value=(XBT_SPENT, ""))),
         patch.object(session, "_sign_transaction", new=sign),
         patch("jmcore.bitcoin.get_txid", return_value="cd" * 32),
     ):
         success, _ = await session.handle_tx(tx_hex)
 
     assert success is True
-    sign.assert_awaited_once_with(tx_hex)
+    sign.assert_awaited_once_with(tx_hex, spent_outputs=XBT_SPENT)
     wallet.metadata_store.load()
     record = wallet.metadata_store.records[f"{outpoint[0]}:{outpoint[1]}"]
     assert record.lock_owner == session.input_lock_owner
@@ -2474,3 +2487,76 @@ async def test_on_tx_masks_non_fee_verification_error_from_taker():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.asyncio
+async def test_xbt_lookup_spent_outputs_uses_wallet_then_own_node():
+    from unittest.mock import AsyncMock, MagicMock
+
+    from jmwallet.backends.base import UTXO
+
+    from maker.coinjoin import CoinJoinSession
+
+    backend = MagicMock()
+    backend.can_lookup_arbitrary_utxos.return_value = True
+    backend.get_utxo = AsyncMock(
+        return_value=UTXO(
+            txid="bb" * 32,
+            vout=1,
+            value=12_345,
+            address="",
+            confirmations=3,
+            scriptpubkey="0014" + "cc" * 20,
+        )
+    )
+    session = CoinJoinSession(
+        taker_nick="J5XbtLookup", offer=MagicMock(), wallet=MagicMock(), backend=backend
+    )
+    session.our_utxos = {("aa" * 32, 0): MagicMock(value=10_000, scriptpubkey="0014" + "aa" * 20)}
+    tx_hex = _maker_signing_tx(session)
+
+    spent, error = await session._lookup_spent_outputs(tx_hex)
+
+    assert error == ""
+    assert spent == [
+        (10_000, bytes.fromhex("0014" + "aa" * 20)),
+        (12_345, bytes.fromhex("0014" + "cc" * 20)),
+    ]
+    backend.get_utxo.assert_awaited_once_with("bb" * 32, 1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["missing", "error", "no_arbitrary_lookup"])
+async def test_xbt_maker_refuses_to_sign_without_every_input(failure: str):
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from maker.coinjoin import CoinJoinSession, CoinJoinState
+
+    backend = MagicMock()
+    backend.requires_neutrino_metadata.return_value = False
+    backend.can_lookup_arbitrary_utxos.return_value = failure != "no_arbitrary_lookup"
+    if failure == "missing":
+        backend.get_utxo = AsyncMock(return_value=None)
+    else:
+        backend.get_utxo = AsyncMock(side_effect=RuntimeError("node down"))
+    session = CoinJoinSession(
+        taker_nick="J5XbtRefuse", offer=MagicMock(), wallet=MagicMock(), backend=backend
+    )
+    session.our_utxos = {("aa" * 32, 0): MagicMock(value=10_000, scriptpubkey="0014" + "aa" * 20)}
+    session.state = CoinJoinState.IOAUTH_SENT
+    session.wallet.network = "regtest"
+    session.wallet.renew_coinjoin_inputs.return_value = True
+    tx_hex = _maker_signing_tx(session)
+    signed = AsyncMock(return_value=["signature"])
+
+    with (
+        patch("maker.coinjoin.verify_unsigned_transaction", return_value=(True, "")),
+        patch.object(session, "_sign_transaction", new=signed),
+    ):
+        success, error = await session.handle_tx(tx_hex)
+
+    assert success is False
+    signed.assert_not_awaited()
+    assert session.signing_boundary_crossed is False
+    assert session.state == CoinJoinState.FAILED
+    assert error["error"]

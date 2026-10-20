@@ -730,9 +730,11 @@ def build_and_sign_direct_tx(
     parsed = deserialize_transaction(unsigned_tx)
     wallet.validate_generated_outputs(parsed, generated_scripts)
 
+    # Unified sighash (XBT) commits to every input; all of them are ours here.
+    spent_outputs = [(utxo.value, bytes.fromhex(utxo.scriptpubkey)) for utxo in ordered_utxos]
     witnesses: list[list[bytes]] = []
     for index, utxo in enumerate(ordered_utxos):
-        witness = wallet.sign_input(parsed, index, utxo).witness
+        witness = wallet.sign_input(parsed, index, utxo, spent_outputs).witness
         if not witness or any(not isinstance(item, bytes) or not item for item in witness):
             raise ValueError(f"Wallet returned an invalid witness for input {index}")
         witnesses.append(witness)

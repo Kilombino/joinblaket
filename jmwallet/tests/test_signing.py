@@ -29,6 +29,15 @@ from jmwallet.wallet.signing import (
     verify_p2wsh_signature,
 )
 
+# XBT build: signing uses the unified sighash (0x21), which needs every
+# input's amount and scriptPubKey. These single-input tests spend a dummy
+# P2WPKH output of the given value.
+_DUMMY_SPK = bytes.fromhex("0014" + "00" * 20)
+
+
+def _spent(value: int = 100000) -> list[tuple[int, bytes]]:
+    return [(value, _DUMMY_SPK)]
+
 
 def _encode_der_integer(value: int) -> bytes:
     encoded = value.to_bytes((value.bit_length() + 7) // 8, "big")
@@ -253,12 +262,12 @@ class TestSigning:
             script_code=script_code,
             value=100000,
             private_key=test_key.private_key,
-            sighash_type=1,
+            spent_outputs=_spent(),
         )
 
         # Signature should be DER-encoded + sighash byte
         assert len(signature) > 64  # DER is variable length
-        assert signature[-1] == 1  # SIGHASH_ALL
+        assert signature[-1] == 0x21  # SIGHASH_UNIFIED | SIGHASH_ALL
 
     def test_sign_invalid_input_index(self, test_key):
         """Test that invalid input index raises error."""
@@ -333,7 +342,7 @@ class TestSigning:
         pubkey = test_key.get_public_key_bytes(compressed=True)
         script_code = create_p2wpkh_script_code(pubkey)
 
-        with pytest.raises(TransactionSigningError, match="only SIGHASH_ALL"):
+        with pytest.raises(TransactionSigningError, match="0x21"):
             sign_p2wpkh_input(
                 tx=tx,
                 input_index=0,
@@ -341,6 +350,7 @@ class TestSigning:
                 value=100000,
                 private_key=test_key.private_key,
                 sighash_type=2,
+                spent_outputs=_spent(),
             )
 
     def test_sign_p2wsh_rejects_non_default_sighash(self, test_key):
@@ -361,7 +371,7 @@ class TestSigning:
             witnesses=[],
         )
 
-        with pytest.raises(TransactionSigningError, match="only SIGHASH_ALL"):
+        with pytest.raises(TransactionSigningError, match="0x21"):
             sign_p2wsh_input(
                 tx=tx,
                 input_index=0,
@@ -369,6 +379,7 @@ class TestSigning:
                 value=100000,
                 private_key=test_key.private_key,
                 sighash_type=0x83,  # SIGHASH_SINGLE|ANYONECANPAY
+                spent_outputs=_spent(),
             )
 
     @pytest.mark.parametrize(
@@ -465,8 +476,12 @@ class TestSignatureVerification:
         pubkey = key.get_public_key_bytes(compressed=True)
         script_code = create_p2wpkh_script_code(pubkey)
 
-        sig1 = sign_p2wpkh_input(tx, 0, script_code, 100000, key.private_key)
-        sig2 = sign_p2wpkh_input(tx, 0, script_code, 100000, key.private_key)
+        sig1 = sign_p2wpkh_input(
+            tx, 0, script_code, 100000, key.private_key, spent_outputs=_spent()
+        )
+        sig2 = sign_p2wpkh_input(
+            tx, 0, script_code, 100000, key.private_key, spent_outputs=_spent()
+        )
 
         assert sig1 == sig2
         assert len(sig1) > 64
@@ -498,22 +513,32 @@ class TestSignatureVerification:
         value = 100000
 
         # Sign
-        signature = sign_p2wpkh_input(tx, 0, script_code, value, key.private_key)
+        signature = sign_p2wpkh_input(
+            tx, 0, script_code, value, key.private_key, spent_outputs=_spent(value)
+        )
 
         # Verify
-        assert verify_p2wpkh_signature(tx, 0, script_code, value, signature, pubkey)
+        assert verify_p2wpkh_signature(tx, 0, script_code, value, signature, pubkey, _spent(value))
 
         high_s_signature = _with_high_s(signature[:-1]) + signature[-1:]
-        assert not verify_p2wpkh_signature(tx, 0, script_code, value, high_s_signature, pubkey)
-        assert not verify_p2wpkh_signature(tx, 0, script_code, value, b"\xff" + signature, pubkey)
+        assert not verify_p2wpkh_signature(
+            tx, 0, script_code, value, high_s_signature, pubkey, _spent(value)
+        )
+        assert not verify_p2wpkh_signature(
+            tx, 0, script_code, value, b"\xff" + signature, pubkey, _spent(value)
+        )
 
         # Verify fails with wrong value
-        assert not verify_p2wpkh_signature(tx, 0, script_code, value - 1, signature, pubkey)
+        assert not verify_p2wpkh_signature(
+            tx, 0, script_code, value - 1, signature, pubkey, _spent(value)
+        )
 
         # Verify fails with wrong pubkey
         other_key = master.derive("m/84'/0'/0'/0/1")
         other_pubkey = other_key.get_public_key_bytes(compressed=True)
-        assert not verify_p2wpkh_signature(tx, 0, script_code, value, signature, other_pubkey)
+        assert not verify_p2wpkh_signature(
+            tx, 0, script_code, value, signature, other_pubkey, _spent(value)
+        )
 
         # Verify fails with wrong signature (corrupted)
         bad_sig = bytearray(signature)
@@ -565,17 +590,19 @@ class TestP2WSHSigning:
             witness_script=freeze_script,
             value=100000,
             private_key=test_key.private_key,
-            sighash_type=1,
+            spent_outputs=_spent(),
         )
 
         # Signature should be DER-encoded + sighash byte
         assert len(signature) > 64  # DER is variable length
-        assert signature[-1] == 1  # SIGHASH_ALL
+        assert signature[-1] == 0x21  # SIGHASH_UNIFIED | SIGHASH_ALL
 
         pubkey = test_key.get_public_key_bytes(compressed=True)
-        assert verify_p2wsh_signature(tx, 0, freeze_script, 100000, signature, pubkey)
+        assert verify_p2wsh_signature(tx, 0, freeze_script, 100000, signature, pubkey, _spent())
         high_s_signature = _with_high_s(signature[:-1]) + signature[-1:]
-        assert not verify_p2wsh_signature(tx, 0, freeze_script, 100000, high_s_signature, pubkey)
+        assert not verify_p2wsh_signature(
+            tx, 0, freeze_script, 100000, high_s_signature, pubkey, _spent()
+        )
 
     def test_create_p2wsh_witness_stack(self, freeze_script):
         """Test creating P2WSH witness stack."""
@@ -605,8 +632,12 @@ class TestP2WSHSigning:
             witnesses=[],
         )
 
-        sig1 = sign_p2wsh_input(tx, 0, freeze_script, 100000, test_key.private_key)
-        sig2 = sign_p2wsh_input(tx, 0, freeze_script, 100000, test_key.private_key)
+        sig1 = sign_p2wsh_input(
+            tx, 0, freeze_script, 100000, test_key.private_key, spent_outputs=_spent()
+        )
+        sig2 = sign_p2wsh_input(
+            tx, 0, freeze_script, 100000, test_key.private_key, spent_outputs=_spent()
+        )
 
         assert sig1 == sig2
         assert len(sig1) > 64
@@ -632,8 +663,12 @@ class TestP2WSHSigning:
         pubkey = test_key.get_public_key_bytes(compressed=True)
         p2wpkh_script_code = create_p2wpkh_script_code(pubkey)
 
-        sig_p2wsh = sign_p2wsh_input(tx, 0, freeze_script, 100000, test_key.private_key)
-        sig_p2wpkh = sign_p2wpkh_input(tx, 0, p2wpkh_script_code, 100000, test_key.private_key)
+        sig_p2wsh = sign_p2wsh_input(
+            tx, 0, freeze_script, 100000, test_key.private_key, spent_outputs=_spent()
+        )
+        sig_p2wpkh = sign_p2wpkh_input(
+            tx, 0, p2wpkh_script_code, 100000, test_key.private_key, spent_outputs=_spent()
+        )
 
         # Signatures should be different because script_code differs
         assert sig_p2wsh != sig_p2wpkh

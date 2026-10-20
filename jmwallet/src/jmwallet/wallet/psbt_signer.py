@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import TYPE_CHECKING, Literal
@@ -40,6 +41,7 @@ from jmwallet.wallet.psbt import (
     parse_witness_utxo,
 )
 from jmwallet.wallet.signing import (
+    SIGHASH_UNIFIED_ALL,
     TransactionSigningError,
     verify_p2wpkh_signature,
     verify_p2wsh_signature,
@@ -135,7 +137,11 @@ class WalletPSBTSigningMixin:
         raise NotImplementedError
 
     def sign_input(
-        self, tx: ParsedTransaction, input_index: int, utxo: UTXOInfo
+        self,
+        tx: ParsedTransaction,
+        input_index: int,
+        utxo: UTXOInfo,
+        spent_outputs: Sequence[tuple[int, bytes]] | None = None,
     ) -> SignedInput:  # pragma: no cover
         raise NotImplementedError
 
@@ -236,10 +242,11 @@ class WalletPSBTSigningMixin:
             self._resolve_regular_inputs_by_scan(psbt, plans, unresolved_regular, scan_range)
 
         for plan, sighash_type in zip(plans, sighash_types, strict=True):
-            if plan.owned and not plan.finalized and sighash_type != 1:
+            if plan.owned and not plan.finalized and sighash_type != SIGHASH_UNIFIED_ALL:
                 raise PSBTError(
                     f"PSBT input {plan.index} requests unsupported sighash type "
-                    f"{sighash_type:#x}; only SIGHASH_ALL (0x01) is allowed"
+                    f"{sighash_type:#x}; this XBT build only signs with the unified "
+                    "sighash SIGHASH_UNIFIED|SIGHASH_ALL (0x21)"
                 )
 
         output_types = [_classify_output_script(output.script) for output in transaction.outputs]
@@ -305,7 +312,10 @@ class WalletPSBTSigningMixin:
                     f"Incomplete signing plan for PSBT input {input_plan.index}"
                 )
             signed = self.sign_input(
-                signing_plan.psbt.transaction, input_plan.index, input_plan.utxo
+                signing_plan.psbt.transaction,
+                input_plan.index,
+                input_plan.utxo,
+                [(p.witness_utxo.value, p.witness_utxo.script_pubkey) for p in signing_plan.inputs],
             )
             if signed.pubkey != input_plan.pubkey:
                 raise TransactionSigningError(
@@ -319,7 +329,8 @@ class WalletPSBTSigningMixin:
             signed_indices.append(input_plan.index)
 
         if signed_indices and signing_plan.psbt.version == 2:
-            # All signatures produced here are SIGHASH_ALL without ANYONECANPAY.
+            # All signatures produced here are SIGHASH_UNIFIED|SIGHASH_ALL (0x21)
+            # without ANYONECANPAY.
             # BIP370 requires disabling input/output modification after signing.
             records = signing_plan.psbt.global_map.records
             for index, record in enumerate(records):
@@ -343,7 +354,7 @@ class WalletPSBTSigningMixin:
         """Extract a verified transaction containing only wallet-owned native inputs.
 
         This deliberately does not finalize foreign scripts. Every input amount
-        must be committed to by a valid wallet SIGHASH_ALL signature before the
+        must be committed to by a valid wallet unified (0x21) signature before the
         extracted transaction's fee can be trusted for broadcasting.
         """
         plan = self.prepare_psbt_signing(psbt_bytes, scan_range)
@@ -614,10 +625,23 @@ def _records_for_type(psbt_map: PSBTMap, key_type: int) -> list[PSBTKeyValue]:
     return [record for record in psbt_map.records if record.key[0] == key_type]
 
 
+def _psbt_spent_outputs(psbt: ParsedPSBT) -> list[tuple[int, bytes]]:
+    """(amount, scriptPubKey) of every PSBT input, as the unified sighash needs."""
+    spent: list[tuple[int, bytes]] = []
+    for index, input_map in enumerate(psbt.input_maps):
+        record = _record_for_type(input_map, PSBT_IN_WITNESS_UTXO)
+        if record is None:
+            raise PSBTError(f"PSBT input {index} is missing witness_utxo")
+        witness_utxo = parse_witness_utxo(record.value)
+        spent.append((witness_utxo.value, witness_utxo.script_pubkey))
+    return spent
+
+
 def _parse_sighash_type(input_map: PSBTMap, index: int) -> int:
     record = _record_for_type(input_map, PSBT_IN_SIGHASH_TYPE)
     if record is None:
-        return 1
+        # XBT build: the implicit default is the unified sighash (0x21).
+        return SIGHASH_UNIFIED_ALL
     if len(record.value) != 4:
         raise PSBTError(f"PSBT input {index} sighash type must be a 4-byte uint32")
     return int.from_bytes(record.value, "little")
@@ -686,10 +710,11 @@ def _validate_signature(
     *,
     witness_script: bytes | None = None,
 ) -> None:
-    if not signature or signature[-1] != 1:
+    if not signature or signature[-1] != SIGHASH_UNIFIED_ALL:
         raise PSBTError(
             f"PSBT input {index} contains an invalid existing signature for this wallet"
         )
+    spent_outputs = _psbt_spent_outputs(psbt)
     if witness_script is None:
         valid = verify_p2wpkh_signature(
             psbt.transaction,
@@ -698,6 +723,7 @@ def _validate_signature(
             witness_utxo.value,
             signature,
             pubkey,
+            spent_outputs,
         )
     else:
         valid = verify_p2wsh_signature(
@@ -707,6 +733,7 @@ def _validate_signature(
             witness_utxo.value,
             signature,
             pubkey,
+            spent_outputs,
         )
     if not valid:
         raise PSBTError(

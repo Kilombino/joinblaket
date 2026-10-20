@@ -471,7 +471,7 @@ class TestDirectTransactionPolicy:
     def _wallet(self) -> MagicMock:
         wallet = MagicMock()
         wallet.get_locked_input_outpoints.return_value = set()
-        wallet.sign_input.side_effect = lambda _tx, index, _utxo: MagicMock(
+        wallet.sign_input.side_effect = lambda _tx, index, _utxo, _spent=None: MagicMock(
             witness=[f"sig-{index}".encode(), b"pubkey"]
         )
         return wallet

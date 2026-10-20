@@ -27,6 +27,11 @@ from jmwallet.wallet.signing import (
 BOND_LOCKTIME = 1_577_836_800
 
 
+def _spent(utxo: UTXOInfo) -> list[tuple[int, bytes]]:
+    """XBT unified sighash: (amount, scriptPubKey) of every input (one here)."""
+    return [(utxo.value, bytes.fromhex(utxo.scriptpubkey))]
+
+
 def _single_input_tx() -> ParsedTransaction:
     return ParsedTransaction(
         version=2,
@@ -72,16 +77,33 @@ class TestSignInputP2WPKH:
         tx = _single_input_tx()
         tx.inputs[0].txid_le = bytes.fromhex(utxo.txid)[::-1]
 
-        signed = wallet_service.sign_input(tx, 0, utxo)
+        signed = wallet_service.sign_input(tx, 0, utxo, _spent(utxo))
 
         assert isinstance(signed, SignedInput)
-        assert signed.signature[-1] == 1  # SIGHASH_ALL
+        assert signed.signature[-1] == 0x21  # SIGHASH_UNIFIED | SIGHASH_ALL
         assert signed.witness == [signed.signature, signed.pubkey]
 
         script_code = create_p2wpkh_script_code(signed.pubkey)
         assert verify_p2wpkh_signature(
-            tx, 0, script_code, utxo.value, signed.signature, signed.pubkey
+            tx, 0, script_code, utxo.value, signed.signature, signed.pubkey, _spent(utxo)
         )
+
+    def test_requires_spent_outputs_of_every_input(self, wallet_service):
+        """XBT: without every input's amount/script the unified sighash is refused."""
+        address = wallet_service.get_address(0, 0, 0)
+        key = wallet_service.get_key_for_address(address)
+        assert key is not None
+        from jmcore.bitcoin import pubkey_to_p2wpkh_script
+
+        scriptpubkey = pubkey_to_p2wpkh_script(key.get_public_key_bytes(compressed=True)).hex()
+        utxo = _p2wpkh_utxo(address, scriptpubkey)
+        tx = _single_input_tx()
+        tx.inputs[0].txid_le = bytes.fromhex(utxo.txid)[::-1]
+
+        with pytest.raises(TransactionSigningError, match="every input"):
+            wallet_service.sign_input(tx, 0, utxo)
+        with pytest.raises(TransactionSigningError, match="does not match the wallet UTXO"):
+            wallet_service.sign_input(tx, 0, utxo, [(utxo.value, b"\x00\x14" + b"\x01" * 20)])
 
     def test_missing_key_raises(self, wallet_service):
         # Address that the wallet has never derived -> unknown key.
@@ -90,7 +112,7 @@ class TestSignInputP2WPKH:
 
         with pytest.raises(TransactionSigningError, match="Missing key"):
             tx.inputs[0].txid_le = bytes.fromhex(utxo.txid)[::-1]
-            wallet_service.sign_input(tx, 0, utxo)
+            wallet_service.sign_input(tx, 0, utxo, _spent(utxo))
 
     def test_p2wsh_without_locktime_raises(self, wallet_service):
         address = wallet_service.get_address(0, 0, 0)
@@ -109,7 +131,7 @@ class TestSignInputP2WPKH:
         tx.inputs[0].txid_le = bytes.fromhex(utxo.txid)[::-1]
 
         with pytest.raises(TransactionSigningError, match="locktime not available"):
-            wallet_service.sign_input(tx, 0, utxo)
+            wallet_service.sign_input(tx, 0, utxo, _spent(utxo))
 
     def test_mismatched_script_raises(self, wallet_service):
         address = wallet_service.get_address(0, 0, 0)
@@ -118,7 +140,7 @@ class TestSignInputP2WPKH:
         tx.inputs[0].txid_le = bytes.fromhex(utxo.txid)[::-1]
 
         with pytest.raises(TransactionSigningError, match="does not match wallet key"):
-            wallet_service.sign_input(tx, 0, utxo)
+            wallet_service.sign_input(tx, 0, utxo, _spent(utxo))
 
     def test_mismatched_outpoint_raises(self, wallet_service):
         address = wallet_service.get_address(0, 0, 0)
@@ -132,7 +154,7 @@ class TestSignInputP2WPKH:
         )
 
         with pytest.raises(TransactionSigningError, match="does not match transaction input"):
-            wallet_service.sign_input(_single_input_tx(), 0, utxo)
+            wallet_service.sign_input(_single_input_tx(), 0, utxo, _spent(utxo))
 
 
 class TestSignInputFidelityBond:
@@ -155,7 +177,7 @@ class TestSignInputFidelityBond:
         tx.inputs[0].sequence = 0xFFFFFFFE
         tx.locktime = BOND_LOCKTIME
 
-        signed = wallet_service.sign_input(tx, 0, utxo)
+        signed = wallet_service.sign_input(tx, 0, utxo, _spent(utxo))
 
         # Witness stack for a timelocked P2WSH is [signature, witness_script].
         assert signed.witness[0] == signed.signature
@@ -188,7 +210,7 @@ class TestSignInputFidelityBond:
         tx.inputs[0].sequence = 0xFFFFFFFE
         tx.locktime = BOND_LOCKTIME
         with pytest.raises(TransactionSigningError, match="does not match wallet key"):
-            wallet_service.sign_input(tx, 0, utxo)
+            wallet_service.sign_input(tx, 0, utxo, _spent(utxo))
 
     def test_uppercase_bond_address_uses_lowercase_cache(self, wallet_service):
         address = wallet_service.get_fidelity_bond_address(0, BOND_LOCKTIME)
@@ -209,6 +231,6 @@ class TestSignInputFidelityBond:
         tx.inputs[0].txid_le = bytes.fromhex(utxo.txid)[::-1]
         tx.inputs[0].sequence = 0xFFFFFFFE
         tx.locktime = BOND_LOCKTIME
-        signed = wallet_service.sign_input(tx, 0, utxo)
+        signed = wallet_service.sign_input(tx, 0, utxo, _spent(utxo))
 
         assert signed.witness[1] == script

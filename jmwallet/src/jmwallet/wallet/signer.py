@@ -26,6 +26,7 @@ from jmcore.btc_script import mk_freeze_script
 
 from jmwallet.wallet.signing import (
     ParsedTransaction,
+    SpentOutputs,
     TransactionSigningError,
     create_p2wpkh_script_code,
     create_p2wsh_witness_stack,
@@ -71,6 +72,7 @@ class WalletSigningMixin:
         tx: ParsedTransaction,
         input_index: int,
         utxo: UTXOInfo,
+        spent_outputs: SpentOutputs | None = None,
     ) -> SignedInput:
         """Sign a single input belonging to this wallet.
 
@@ -78,10 +80,16 @@ class WalletSigningMixin:
         to produce transaction signatures. Callers select inputs and assemble
         the final transaction, but never handle key material directly.
 
+        XBT build: every signature uses the unified sighash (0x21), which
+        commits to the amount and scriptPubKey of *every* input, so callers
+        must pass ``spent_outputs`` for the whole transaction (taken from
+        their own wallet or node, never from an unverified peer claim).
+
         Args:
             tx: The parsed unsigned transaction being signed.
             input_index: Index of the input to sign within ``tx``.
             utxo: The wallet UTXO being spent at ``input_index``.
+            spent_outputs: (amount, scriptPubKey) of every input, in order.
 
         Returns:
             A :class:`SignedInput` with the signature, public key and witness
@@ -106,6 +114,15 @@ class WalletSigningMixin:
             raise TransactionSigningError(f"Missing key for address {utxo.address}") from exc
         if key is None:
             raise TransactionSigningError(f"Missing key for address {utxo.address}")
+
+        if spent_outputs is None or len(spent_outputs) != len(tx.inputs):
+            raise TransactionSigningError(
+                "Unified sighash needs the amount and scriptPubKey of every input"
+            )
+        if bytes(spent_outputs[input_index][1]).hex() != utxo.scriptpubkey.lower():
+            raise TransactionSigningError(
+                f"Spent scriptPubKey for input {input_index} does not match the wallet UTXO"
+            )
 
         pubkey_bytes = key.get_public_key_bytes(compressed=True)
         private_key = key.private_key
@@ -137,6 +154,7 @@ class WalletSigningMixin:
                 witness_script=witness_script,
                 value=utxo.value,
                 private_key=private_key,
+                spent_outputs=spent_outputs,
             )
             witness = create_p2wsh_witness_stack(signature, witness_script)
             return SignedInput(signature=signature, pubkey=pubkey_bytes, witness=witness)
@@ -167,6 +185,7 @@ class WalletSigningMixin:
             script_code=script_code,
             value=utxo.value,
             private_key=private_key,
+            spent_outputs=spent_outputs,
         )
         witness = create_witness_stack(signature, pubkey_bytes)
         return SignedInput(signature=signature, pubkey=pubkey_bytes, witness=witness)

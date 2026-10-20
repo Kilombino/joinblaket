@@ -2000,6 +2000,15 @@ class CoinJoinSession:
             txid_hex = tx_input.txid_le[::-1].hex()
             input_map[idx] = (txid_hex, tx_input.vout)
 
+        # XBT: maker signatures must use the unified sighash (0x21), which
+        # commits to every input's amount and scriptPubKey.
+        try:
+            spent_outputs = self._spent_outputs_for(tx)
+        except TransactionSigningError as e:
+            logger.error("Cannot verify maker signatures")
+            logger.bind(sensitive=True).error("Spent output assembly failed: {}", e)
+            return False
+
         # Process responses
         low_fee_decline: tuple[float, float] | None = None
         for nick in list(self.maker_sessions.keys()):
@@ -2090,7 +2099,7 @@ class CoinJoinSession:
                             script_code = create_p2wpkh_script_code(pubkey)
 
                             if verify_p2wpkh_signature(
-                                tx, idx, script_code, value, signature, pubkey
+                                tx, idx, script_code, value, signature, pubkey, spent_outputs
                             ):
                                 matched_input_idx = idx
                                 break
@@ -2183,6 +2192,32 @@ class CoinJoinSession:
         logger.bind(sensitive=True).info("Signed tx: {} bytes", len(self.final_tx))
         return True
 
+    def _spent_outputs_for(self, tx: Any) -> list[tuple[int, bytes]]:
+        """Amount and scriptPubKey of every input of ``tx``, in input order.
+
+        Required by the XBT unified sighash (0x21). Our inputs come from the
+        wallet; maker inputs come from ``session.utxos``, which the taker
+        filled from its own node lookup when processing ``!ioauth`` (never
+        from maker claims on the descriptor-wallet backend).
+        """
+        known: dict[tuple[str, int], tuple[int, bytes]] = {}
+        for utxo in self.selected_utxos:
+            known[(utxo.txid, utxo.vout)] = (utxo.value, bytes.fromhex(utxo.scriptpubkey))
+        for session in self.maker_sessions.values():
+            for u in session.utxos:
+                spk = u.get("scriptpubkey", "")
+                if spk:
+                    known[(u["txid"], u["vout"])] = (int(u["value"]), bytes.fromhex(spk))
+        spent: list[tuple[int, bytes]] = []
+        for tx_input in tx.inputs:
+            key = (tx_input.txid_le[::-1].hex(), tx_input.vout)
+            if key not in known:
+                raise TransactionSigningError(
+                    f"No verified amount/scriptPubKey for input {key[0]}:{key[1]}"
+                )
+            spent.append(known[key])
+        return spent
+
     async def _sign_our_inputs(self) -> list[dict[str, Any]]:
         """
         Sign taker's inputs in the transaction.
@@ -2225,6 +2260,9 @@ class CoinJoinSession:
                 generated_scripts.append(address_to_scriptpubkey(self.taker_change_address))
             self.wallet.validate_generated_outputs(tx, generated_scripts)
 
+            # XBT unified sighash: commit to every input's amount and script.
+            spent_outputs = self._spent_outputs_for(tx)
+
             # Sign each of our UTXOs
             for utxo in self.selected_utxos:
                 # Find the input index in the transaction
@@ -2250,7 +2288,7 @@ class CoinJoinSession:
                 # This is the local signing boundary. Maker signatures alone
                 # cannot spend taker inputs.
                 self.signing_boundary_crossed = True
-                signed = self.wallet.sign_input(tx, input_index, utxo)
+                signed = self.wallet.sign_input(tx, input_index, utxo, spent_outputs)
 
                 signatures_info.append(
                     {
