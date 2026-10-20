@@ -20,7 +20,7 @@ from jmcore.cli_common import resolve_mnemonic, select_mnemonic_source, setup_cl
 from jmcore.cli_help import SortedTyper, version_options
 from jmcore.config import build_tor_control_config
 from jmcore.maker_env import parse_maker_env
-from jmcore.models import NetworkType, OfferType
+from jmcore.models import NetworkType, OfferType, require_directory_servers
 from jmcore.notifications import get_notifier
 from jmcore.paths import remove_nick_state, write_nick_state
 from jmcore.secure_files import read_private_file
@@ -204,6 +204,8 @@ def build_maker_config(
         dir_servers = DEFAULT_DIRECTORY_SERVERS.get(effective_network.value, [])
     else:
         dir_servers = settings.get_directory_servers()
+    # XBT build: no default directories; refuse to start without XBT ones.
+    require_directory_servers(dir_servers)
 
     # Resolve Tor settings
     effective_socks_host = tor_socks_host if tor_socks_host is not None else settings.tor.socks_host

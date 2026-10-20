@@ -34,7 +34,7 @@ def _valid_handshake(**overrides: object) -> str:
         "proto-ver": JM_VERSION,
         "features": {},
         "nick": "test_client",
-        "network": "mainnet",
+        "network": "xbt",  # XBT build wire network
     }
     handshake.update(overrides)
     return json.dumps(handshake)
@@ -49,7 +49,7 @@ def test_valid_handshake(handler):
             "proto-ver": JM_VERSION,
             "features": {},
             "nick": "test_client",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -70,7 +70,7 @@ def test_handshake_wrong_app_name(handler):
             "proto-ver": JM_VERSION,
             "features": {},
             "nick": "test",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -87,7 +87,7 @@ def test_handshake_wrong_protocol_version(handler):
             "proto-ver": 999,
             "features": {},
             "nick": "test",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -105,7 +105,7 @@ def test_handshake_protocol_version_too_old(handler):
             "proto-ver": JM_VERSION_MIN - 1,
             "features": {},
             "nick": "test",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -123,7 +123,7 @@ def test_handshake_protocol_version_min_accepted(handler):
             "proto-ver": JM_VERSION_MIN,
             "features": {},
             "nick": "test_client",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -142,7 +142,7 @@ def test_handshake_protocol_version_max_accepted(handler):
             "proto-ver": JM_VERSION,
             "features": {},
             "nick": "test_client",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -160,7 +160,7 @@ def test_handshake_wrong_network(handler):
             "proto-ver": JM_VERSION,
             "features": {},
             "nick": "test",
-            "network": "testnet",
+            "network": "xbt-testnet",  # XBT build wire network
         }
     )
 
@@ -177,7 +177,7 @@ def test_handshake_directory_client_rejected(handler):
             "proto-ver": JM_VERSION,
             "features": {},
             "nick": "test",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -194,7 +194,7 @@ def test_handshake_not_serving(handler):
             "proto-ver": JM_VERSION,
             "features": {},
             "nick": "test_client",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -226,7 +226,7 @@ def test_handshake_lenient_location(handler):
             "proto-ver": JM_VERSION,
             "features": {},
             "nick": "test_client",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -373,7 +373,7 @@ def test_advertises_nick_auth_only_with_enabled_mode_and_identity():
             "proto-ver": JM_VERSION,
             "features": {FEATURE_NICK_AUTH: True},
             "nick": "test_client",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -402,7 +402,7 @@ def test_require_verified_rejects_legacy_client_with_ordinary_response():
             "proto-ver": JM_VERSION,
             "features": {},
             "nick": "legacy_client",
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 
@@ -435,7 +435,7 @@ class TestVersionNegotiation:
                 "proto-ver": 5,  # Client is v5
                 "features": {},
                 "nick": "v5_client",
-                "network": "mainnet",
+                "network": "xbt",  # XBT build wire network
             }
         )
 
@@ -455,7 +455,7 @@ class TestVersionNegotiation:
                 "proto-ver": 5,
                 "features": {"neutrino_compat": True},
                 "nick": "neutrino_client",
-                "network": "mainnet",
+                "network": "xbt",  # XBT build wire network
             }
         )
 
@@ -475,7 +475,7 @@ class TestVersionNegotiation:
                 "proto-ver": 5,
                 "features": {},
                 "nick": "legacy_client",
-                "network": "mainnet",
+                "network": "xbt",  # XBT build wire network
             }
         )
 
@@ -507,7 +507,7 @@ class TestNeutrinoCompatServer:
                 "proto-ver": 5,
                 "features": {},
                 "nick": "test_client",
-                "network": "mainnet",
+                "network": "xbt",  # XBT build wire network
             }
         )
 
@@ -525,7 +525,7 @@ class TestNeutrinoCompatServer:
                 "proto-ver": 5,
                 "features": {},
                 "nick": "test_client",
-                "network": "mainnet",
+                "network": "xbt",  # XBT build wire network
             }
         )
 
@@ -592,7 +592,7 @@ class TestPingFeatureNegotiation:
                 "proto-ver": JM_VERSION,
                 "features": {},
                 "nick": "test_client",
-                "network": "mainnet",
+                "network": "xbt",  # XBT build wire network
             }
         )
 
@@ -610,7 +610,7 @@ class TestPingFeatureNegotiation:
                 "proto-ver": JM_VERSION,
                 "features": {"ping": True},
                 "nick": "ping_client",
-                "network": "mainnet",
+                "network": "xbt",  # XBT build wire network
             }
         )
 
@@ -628,7 +628,7 @@ class TestPingFeatureNegotiation:
                 "proto-ver": JM_VERSION,
                 "features": {},
                 "nick": "legacy_client",
-                "network": "mainnet",
+                "network": "xbt",  # XBT build wire network
             }
         )
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from jmcore.models import NetworkType
+from jmcore.models import NetworkType, require_directory_servers
 from jmcore.settings import DEFAULT_DIRECTORY_SERVERS, JoinMarketSettings
 
 from taker.config import (
@@ -157,6 +157,8 @@ def build_taker_config_kwargs(
         dir_servers = DEFAULT_DIRECTORY_SERVERS.get(effective_network.value, [])
     else:
         dir_servers = settings.get_directory_servers()
+    # XBT build: no default directories; refuse to start without XBT ones.
+    require_directory_servers(dir_servers)
 
     # Resolve taker-specific settings
     effective_counterparties = (

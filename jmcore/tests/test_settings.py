@@ -690,12 +690,11 @@ class TestDirectoryServers:
     """Tests for directory server configuration."""
 
     def test_default_directory_servers_mainnet(self) -> None:
-        """Test that mainnet has default directory servers."""
+        """XBT build: mainnet has no default (real-Bitcoin) directory servers."""
         settings = JoinMarketSettings()
 
         servers = settings.get_directory_servers()
-        assert len(servers) >= 2
-        assert all(".onion:" in s for s in servers)
+        assert servers == []
 
     def test_custom_directory_servers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test custom directory servers."""
@@ -708,12 +707,11 @@ class TestDirectoryServers:
         assert servers == ["custom1.onion:5222", "custom2.onion:5222"]
 
     def test_signet_directory_servers(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test signet network directory servers (currently empty, must be user-configured)."""
+        """XBT build: signet has no default directory servers either."""
         settings = JoinMarketSettings(network_config={"network": "signet"})
 
         servers = settings.get_directory_servers()
-        assert len(servers) >= 1
-        assert all(".onion:" in s for s in servers)
+        assert servers == []
 
 
 class TestGetSettings:

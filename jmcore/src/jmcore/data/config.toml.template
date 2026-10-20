@@ -54,6 +54,8 @@
 
 [bitcoin]
 # Backend type: "descriptor_wallet" (default) or "neutrino".
+# XBT build: only "descriptor_wallet" against Bitcoin Knots BLAKE2b is supported;
+# the node is checked at startup and refused if it is not a BLAKE2b node.
 # backend_type = "descriptor_wallet"
 
 # Bitcoin Core RPC settings (for all backend types)
@@ -159,14 +161,18 @@
 
 [network_config]
 # Network: "mainnet", "testnet", "signet", or "regtest"
+# XBT build: "mainnet" means the Bitcoin BLAKE2b (XBT) chain. Addresses stay
+# mainnet-style (bc1, m/84'/0'), but handshakes announce and require "xbt"
+# ("xbt-regtest" etc. for test networks), so upstream peers are refused.
 # network = "mainnet"
 
-# Optional: Override Bitcoin network (usually same as network)
+# Optional: Override Bitcoin network. XBT build: must equal network if set.
 # bitcoin_network = "mainnet"
 
-# Directory servers (leave empty to use network defaults)
-# Override with a custom list if needed:
-# directory_servers = ["custom1.onion:5222", "custom2.onion:5222"]
+# Directory servers. XBT build: there are NO defaults (the upstream defaults
+# are real-Bitcoin directories); makers and takers refuse to start until this
+# lists XBT directories:
+# directory_servers = ["xbtdirectory1.onion:5222", "xbtdirectory2.onion:5222"]
 
 # Development only: permit direct TCP to non-onion JoinMarket directories and
 # peers. Production networks require .onion endpoints by default. Regtest

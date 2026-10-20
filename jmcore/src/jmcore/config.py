@@ -268,6 +268,23 @@ class WalletConfig(BaseModel):
         }
 
     @model_validator(mode="after")
+    def require_single_network_identity(self) -> WalletConfig:
+        """XBT build: protocol and address networks must be the same.
+
+        Upstream lets the protocol network (handshake) and the address network
+        differ, and the jm-wallet CLI derives addresses from the former while
+        maker/taker use the latter. This build ties them together so every
+        component derives the same keys and addresses (XBT: mainnet, bc1,
+        m/84'/0') and announces the matching XBT wire network.
+        """
+        if self.bitcoin_network is not None and self.bitcoin_network != self.network:
+            raise ValueError(
+                f"bitcoin_network ({self.bitcoin_network.value}) must equal network "
+                f"({self.network.value}) in the XBT build"
+            )
+        return self
+
+    @model_validator(mode="after")
     def require_onion_directories_in_production(self) -> WalletConfig:
         """Reject direct directory endpoints outside explicit development use."""
         if self.network is NetworkType.REGTEST or self.allow_clearnet_connections:

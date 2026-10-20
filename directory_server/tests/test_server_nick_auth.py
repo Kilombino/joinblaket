@@ -110,7 +110,7 @@ def _handshake_line(
             "proto-ver": JM_VERSION,
             "features": {FEATURE_NICK_AUTH: True} if advertise_auth else {},
             "nick": identity.nick,
-            "network": "mainnet",
+            "network": "xbt",  # XBT build wire network
         }
     )
 

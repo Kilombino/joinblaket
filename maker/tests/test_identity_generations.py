@@ -704,7 +704,7 @@ async def test_rotation_with_open_direct_socket_keeps_serving(
             json.dumps(
                 {
                     "type": MessageType.HANDSHAKE.value,
-                    "line": json.dumps({"nick": "J5Peer", "network": "regtest"}),
+                    "line": json.dumps({"nick": "J5Peer", "network": "xbt-regtest"}),
                 }
             ).encode()
         )
@@ -793,7 +793,7 @@ async def test_direct_handshake_advertises_virtual_onion_port(bot: MakerBot) -> 
     connection.send = AsyncMock()
     handshake = {
         "type": MessageType.HANDSHAKE.value,
-        "line": json.dumps({"nick": "J5Peer", "network": "regtest"}),
+        "line": json.dumps({"nick": "J5Peer", "network": "xbt-regtest"}),
     }
 
     handled = await bot._try_handle_handshake(

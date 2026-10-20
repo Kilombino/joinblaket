@@ -53,7 +53,7 @@ async def test_pending_handshake_admission_is_bounded_and_reclaimed() -> None:
                     "proto-ver": JM_VERSION,
                     "features": {},
                     "nick": "established",
-                    "network": "mainnet",
+                    "network": "xbt",  # XBT build wire network
                 }
             ),
         )

@@ -6,7 +6,13 @@ Implements Single Responsibility Principle: only handles handshakes.
 
 import json
 
-from jmcore.models import NetworkType, PeerInfo, PeerStatus
+from jmcore.models import (
+    NetworkType,
+    PeerInfo,
+    PeerStatus,
+    parse_wire_network,
+    wire_network,
+)
 from jmcore.nick_auth import NickAuthMode
 from jmcore.protocol import (
     FEATURE_NEUTRINO_COMPAT,
@@ -108,7 +114,9 @@ class HandshakeHandler:
 
             peer_network = self._parse_network(network_str)
             if peer_network != self.network:
-                raise HandshakeError(f"Network mismatch: {network_str} != {self.network.value}")
+                raise HandshakeError(
+                    f"Network mismatch: {network_str} != {wire_network(self.network)}"
+                )
 
             onion_address, port = self._parse_location(location_string)
 
@@ -170,8 +178,10 @@ class HandshakeHandler:
             raise HandshakeError(f"Invalid handshake format: {e}") from e
 
     def _parse_network(self, network_str: str) -> NetworkType:
+        # XBT build: only "xbt"/"xbt-<net>" are accepted; upstream "mainnet"
+        # (real-Bitcoin JoinMarket) is rejected as an invalid network.
         try:
-            return NetworkType(network_str.lower())
+            return parse_wire_network(network_str)
         except ValueError as e:
             raise HandshakeError(f"Invalid network: {network_str}") from e
 

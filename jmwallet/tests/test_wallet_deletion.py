@@ -426,6 +426,7 @@ def test_collect_neutrino_watch_addresses_rejects_invalid_checkpoint_and_metadat
         collect_neutrino_watch_addresses(**kwargs)
 
 
+@pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
 def test_delete_cli_neutrino_removes_wallet_and_selected_shared_data(tmp_path: Path) -> None:
     mnemonic_file = tmp_path / "wallets" / "delete-me.mnemonic"
     save_mnemonic_file(MNEMONIC, mnemonic_file, None)
@@ -491,6 +492,7 @@ def test_delete_cli_neutrino_removes_wallet_and_selected_shared_data(tmp_path: P
     assert not get_registry_path(tmp_path, fingerprint).exists()
 
 
+@pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
 def test_delete_cli_neutrino_dry_run_derives_without_removing_watches(tmp_path: Path) -> None:
     mnemonic_file = tmp_path / "wallet.mnemonic"
     save_mnemonic_file(MNEMONIC, mnemonic_file, None)
@@ -566,6 +568,7 @@ def test_delete_cli_neutrino_uses_bitcoin_address_network(tmp_path: Path) -> Non
     remove_watches.assert_not_awaited()
 
 
+@pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
 def test_delete_cli_neutrino_cleanup_failure_keeps_local_data(tmp_path: Path) -> None:
     mnemonic_file = tmp_path / "wallet.mnemonic"
     save_mnemonic_file(MNEMONIC, mnemonic_file, None)
@@ -689,6 +692,7 @@ def test_delete_cli_keep_backend_wallet_only_removes_local_data(tmp_path: Path) 
     backend.assert_not_called()
 
 
+@pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
 def test_delete_cli_rejects_wrong_fingerprint_confirmation(tmp_path: Path) -> None:
     mnemonic_file = tmp_path / "wallet.mnemonic"
     save_mnemonic_file(MNEMONIC, mnemonic_file, None)

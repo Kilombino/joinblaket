@@ -45,6 +45,8 @@ def _handshake_response(*, nick_auth: bool = False) -> bytes:
             "proto-ver-max": 5,
             "features": features,
             "nick": "directory",
+            # XBT build: directories must answer with our XBT wire network.
+            "network": "xbt-regtest",
         }
     )
     return json.dumps({"type": MessageType.DN_HANDSHAKE.value, "line": line}).encode()
@@ -324,7 +326,7 @@ async def test_nick_auth_valid_challenge_proof_and_result_use_exact_wire_envelop
                 "ping": True,
             },
             "nick": identity.nick,
-            "network": "regtest",
+            "network": "xbt-regtest",  # XBT build wire network
         }
     )
     expected_handshake = json.dumps(

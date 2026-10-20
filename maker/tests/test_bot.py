@@ -3027,7 +3027,7 @@ class TestDirectConnectionHandshake:
                     "proto-ver": 5,
                     "features": {"peerlist_features": True},
                     "nick": "J5TestNick",
-                    "network": "regtest",
+                    "network": "xbt-regtest",
                 }
             ),
         }
@@ -3050,7 +3050,7 @@ class TestDirectConnectionHandshake:
         assert response_data["directory"] is False
         assert response_data["proto-ver"] == 5
         assert response_data["nick"] == maker_bot.nick
-        assert response_data["network"] == "regtest"
+        assert response_data["network"] == "xbt-regtest"
         assert "location-string" in response_data
         assert response_data["app-name"] == "joinmarket"
 
@@ -3089,7 +3089,7 @@ class TestDirectConnectionHandshake:
                     "proto-ver": JM_VERSION,
                     "features": {},
                     "nick": "J5TestNick",
-                    "network": "regtest",
+                    "network": "xbt-regtest",
                 }
             ),
         }
@@ -3185,7 +3185,7 @@ class TestDirectConnectionHandshake:
                     "proto-ver": 5,
                     "features": {},
                     "nick": "J5RefPeer",
-                    "network": "testnet",
+                    "network": "xbt-testnet",
                 }
             ),
         }
@@ -3243,7 +3243,7 @@ class TestDirectConnectionHandshake:
                     "proto-ver": 5,
                     "features": {},
                     "nick": "J5OurPeer",
-                    "network": "signet",
+                    "network": "xbt-signet",
                 }
             ),
         }
@@ -3272,7 +3272,7 @@ class TestDirectConnectionHandshake:
                     "proto-ver": 5,
                     "features": {},
                     "nick": "J5TestNick",
-                    "network": "regtest",
+                    "network": "xbt-regtest",
                 }
             ),
         }
@@ -3315,7 +3315,7 @@ class TestDirectConnectionHandshake:
                     "proto-ver": 5,
                     "features": {},
                     "nick": "J5TestNick",
-                    "network": "regtest",
+                    "network": "xbt-regtest",
                 }
             ),
         }
@@ -3456,7 +3456,7 @@ class TestReferenceCompatHandshake:
                     "proto-ver": 5,
                     "features": {},
                     "nick": "J5RefTakerNick",
-                    "network": "regtest",
+                    "network": "xbt-regtest",
                 }
             ),
         }
@@ -3499,7 +3499,7 @@ class TestReferenceCompatHandshake:
                     "proto-ver": 5,
                     "features": {},
                     "nick": "J5RefTakerNick",
-                    "network": "regtest",
+                    "network": "xbt-regtest",
                 }
             ),
         }
@@ -3537,7 +3537,7 @@ class TestReferenceCompatHandshake:
                     "proto-ver": 5,
                     "features": {},
                     "nick": "J5RefTakerNick",
-                    "network": "regtest",
+                    "network": "xbt-regtest",
                 }
             ),
         }
@@ -3573,7 +3573,7 @@ class TestReferenceCompatHandshake:
                     "proto-ver": 5,
                     "features": {},
                     "nick": "J5RefTakerNick",
-                    "network": "regtest",
+                    "network": "xbt-regtest",
                 }
             ),
         }

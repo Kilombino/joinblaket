@@ -45,25 +45,30 @@ def validate_json_nesting_depth(obj: Any, max_depth: int = 10, current_depth: in
             validate_json_nesting_depth(item, max_depth, current_depth + 1)
 
 
-# Default directory servers for each network
-# Mainnet nodes verified as working (from https://joinmarket-ng.sgn.space/orderbook.json)
-DIRECTORY_NODES_MAINNET: list[str] = [
-    "satoshi2vcg5e2ept7tjkzlkpomkobqmgtsjzegg6wipnoajadissead.onion:5222",
-    "coinjointovy3eq5fjygdwpkbcdx63d7vd4g32mw7y553uj3kjjzkiqd.onion:5222",
-    "nakamotourflxwjnjpnrk7yc2nhkf6r62ed4gdfxmmn5f4saw5q5qoyd.onion:5222",
-    "odpwaf67rs5226uabcamvypg3y4bngzmfk7255flcdodesqhsvkptaid.onion:5222",
-    "jmarketxf5wc4aldf3slm5u6726zsky52bqnfv6qyxe5hnafgly6yuyd.onion:5222",
-    "jmrust7bgdbdl6skkvuzhqost4jkikrluj6alemspeifm5hvgqz2qaad.onion:5222",
-    "nok55gjlqw6h76zi6gigukoztpx7xgo5r3w5csu362nys5yukzrxpgad.onion:5222",
-    "6ryhtj36y4bsscfrxd4zkiwx6yo3pqp5pndvzrbszdanizhzi2cpkbid.onion:5222",
-]
+# Default directory servers for each network.
+# XBT build: there are deliberately NO default directories. The upstream
+# defaults are the real-Bitcoin (SHA-256) JoinMarket directories; an XBT
+# wallet must never join that market. Users must set
+# network_config.directory_servers to XBT directories explicitly.
+DIRECTORY_NODES_MAINNET: list[str] = []
 
-# Signet default directory nodes
-DIRECTORY_NODES_SIGNET: list[str] = [
-    "signetvaxgd3ivj4tml4g6ed3samaa2rscre2gyeyohncmwk4fbesiqd.onion:5222",
-    "u5oj5etqex3vh7jagljf3e2lo4awmmtcw3klbrlt2fonzyozpn5txrqd.onion:5222",
-    "frqp4m6yveiagow73dplmnyv2abrqhte2grbhgw7hkbkhrv6zagrqbqd.onion:5222",
-]
+# Signet default directory nodes (upstream signet; none for the XBT build)
+DIRECTORY_NODES_SIGNET: list[str] = []
+
+NO_DIRECTORY_SERVERS_ERROR = (
+    "No directory servers configured. This XBT build has no default directories: "
+    "set directory_servers to XBT directories (network_config.directory_servers in "
+    "config.toml, or --directory)."
+)
+
+
+def require_directory_servers(servers: list[str]) -> list[str]:
+    """Refuse to start without explicitly configured (XBT) directory servers."""
+    if not servers:
+        raise ValueError(NO_DIRECTORY_SERVERS_ERROR)
+    return servers
+
+
 # No default directory nodes for testnet/regtest - must be configured by user
 DIRECTORY_NODES_TESTNET: list[str] = []
 
@@ -92,6 +97,39 @@ class NetworkType(StrEnum):
     TESTNET = "testnet"
     SIGNET = "signet"
     REGTEST = "regtest"
+
+
+# XBT build: network identity on the wire.
+#
+# The handshake "network" field is the only thing that keeps JoinMarket
+# markets apart. Internally this build keeps NetworkType.MAINNET (mainnet
+# addresses: bc1, m/84'/0') because XBT shares Bitcoin's address formats, but
+# on the wire it announces and requires "xbt" (and "xbt-<net>" for test
+# networks). Upstream peers/directories send "mainnet" and reject "xbt", so
+# neither side can join the other's market by accident.
+XBT_WIRE_NETWORKS: dict[NetworkType, str] = {
+    NetworkType.MAINNET: "xbt",
+    NetworkType.TESTNET: "xbt-testnet",
+    NetworkType.SIGNET: "xbt-signet",
+    NetworkType.REGTEST: "xbt-regtest",
+}
+_XBT_WIRE_TO_NETWORK = {wire: net for net, wire in XBT_WIRE_NETWORKS.items()}
+
+
+def wire_network(network: NetworkType | str) -> str:
+    """The network string this build sends in handshakes for ``network``."""
+    return XBT_WIRE_NETWORKS[NetworkType(network)]
+
+
+def parse_wire_network(value: object) -> NetworkType:
+    """Parse a peer's handshake network; only XBT identifiers are accepted.
+
+    Raises:
+        ValueError: for anything else, including upstream "mainnet".
+    """
+    if isinstance(value, str) and value.lower() in _XBT_WIRE_TO_NETWORK:
+        return _XBT_WIRE_TO_NETWORK[value.lower()]
+    raise ValueError(f"Not an XBT network identifier: {value!r}")
 
 
 class PeerInfo(BaseModel):

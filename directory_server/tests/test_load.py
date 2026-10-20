@@ -19,7 +19,7 @@ from unittest.mock import patch
 import psutil
 import pytest
 import pytest_asyncio
-from jmcore.models import MessageEnvelope, NetworkType
+from jmcore.models import MessageEnvelope, NetworkType, wire_network
 from jmcore.protocol import COMMAND_PREFIX, JM_VERSION, MessageType
 from jmcore.settings import DirectoryServerSettings
 from loguru import logger
@@ -80,7 +80,7 @@ class MockPeerClient:
                 "proto-ver": JM_VERSION,
                 "features": {},
                 "nick": self.nick,
-                "network": self.network.value,
+                "network": wire_network(self.network),  # XBT build
             }
         )
 

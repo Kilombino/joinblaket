@@ -45,28 +45,11 @@ from loguru import logger
 _MEMPOOL_ONION = "http://mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion"
 _ESPLORA_ONION = "http://explorerzydxu5ecjrkwceayqybizmpjjznk5izmitf2modhcusuqlid.onion"
 
-DEFAULT_FEE_SOURCE_URLS: dict[str, tuple[str, ...]] = {
-    "mainnet": (
-        f"{_MEMPOOL_ONION}/api/v1/fees/recommended",
-        f"{_ESPLORA_ONION}/api/fee-estimates",
-        "https://mempool.space/api/v1/fees/recommended",
-        "https://blockstream.info/api/fee-estimates",
-    ),
-    "testnet": (
-        f"{_MEMPOOL_ONION}/testnet/api/v1/fees/recommended",
-        f"{_ESPLORA_ONION}/testnet/api/fee-estimates",
-        "https://mempool.space/testnet/api/v1/fees/recommended",
-        "https://blockstream.info/testnet/api/fee-estimates",
-    ),
-    "testnet4": (
-        f"{_MEMPOOL_ONION}/testnet4/api/v1/fees/recommended",
-        "https://mempool.space/testnet4/api/v1/fees/recommended",
-    ),
-    "signet": (
-        f"{_MEMPOOL_ONION}/signet/api/v1/fees/recommended",
-        "https://mempool.space/signet/api/v1/fees/recommended",
-    ),
-}
+# XBT build: no default external fee sources. The upstream defaults are
+# real-Bitcoin (SHA-256) explorers whose fee estimates say nothing about the
+# XBT mempool; fees come from the node's estimatesmartfee instead. A source can
+# still be set explicitly with bitcoin.fee_estimate_url.
+DEFAULT_FEE_SOURCE_URLS: dict[str, tuple[str, ...]] = {}
 
 # Parse-time absurdity bound (defense in depth, well above any historically
 # observed mainnet fee rate). The real spending limit is the per-wallet

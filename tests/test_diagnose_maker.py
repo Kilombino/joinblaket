@@ -64,6 +64,7 @@ def _handshake_response(*, nick_auth: bool = False) -> bytes:
                 "proto-ver-max": JM_VERSION,
                 "features": features,
                 "nick": "directory",
+                "network": "xbt-signet",  # XBT build wire network
             }
         ),
     )
@@ -348,7 +349,7 @@ async def test_diagnose_uses_authenticated_signet_directory_then_direct_wire(
     )
     sent = [json.loads(call.args[0]) for call in transport.send.await_args_list]
     handshake = sent[0]
-    assert json.loads(handshake["line"])["network"] == "signet"
+    assert json.loads(handshake["line"])["network"] == "xbt-signet"
     proof = NickAuthProof.parse(sent[1]["line"])
     assert verify_nick_auth_proof(
         proof, CHALLENGE, DIRECTORY_ENDPOINT, handshake["line"], taker.nick, JM_VERSION
@@ -871,7 +872,7 @@ async def test_real_direct_client_receives_signed_offer_and_logs_wire_messages(
                         "app-name": "joinmarket",
                         "directory": False,
                         "proto-ver": JM_VERSION,
-                        "network": "signet",
+                        "network": "xbt-signet",  # XBT build wire network
                         "nick": maker.nick,
                     }
                 ),

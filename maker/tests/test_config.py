@@ -910,6 +910,7 @@ class TestBuildMakerConfig:
         )
         assert config.offer_reannounce_delay_max == 0
 
+    @pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
     def test_neutrino_tls_and_auth_in_backend_config(self) -> None:
         """Test that neutrino TLS cert and auth token flow into maker backend_config."""
         from jmcore.settings import JoinMarketSettings
@@ -932,6 +933,7 @@ class TestBuildMakerConfig:
         assert config.backend_config.get("tls_cert_path") == "/tmp/neutrino/tls.cert"
         assert config.backend_config.get("auth_token") == "token-123"
 
+    @pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
     def test_neutrino_include_mempool_flows_to_backend(self, tmp_path: Path, monkeypatch) -> None:
         """The neutrino_include_mempool toggle reaches NeutrinoBackend so the
         documented chain-only opt-out is not silently ignored for the maker."""
@@ -964,6 +966,7 @@ class TestBuildMakerConfig:
         _, kwargs = mock_cls.call_args
         assert kwargs["include_mempool"] is False
 
+    @pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
     def test_neutrino_defaults_resolve_and_upgrade_https(self, tmp_path: Path, monkeypatch) -> None:
         """Default relative cert/token paths resolve against the data dir, the
         auth-token file is read, and the URL is upgraded to HTTPS."""

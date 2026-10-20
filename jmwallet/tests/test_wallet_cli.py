@@ -4020,6 +4020,7 @@ def _write_neutrino_config(tmpdir: str) -> None:
     )
 
 
+@pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
 def test_info_scan_status_fails_fast_on_neutrino_backend(monkeypatch) -> None:
     """``jm-wallet info --scan-status`` is a Bitcoin Core descriptor-wallet
     diagnostic with no Neutrino analogue. When the configured backend is
@@ -4051,6 +4052,7 @@ def test_info_scan_status_fails_fast_on_neutrino_backend(monkeypatch) -> None:
         descriptor_ctor.assert_not_called()
 
 
+@pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
 def test_rescan_fails_fast_on_neutrino_backend(monkeypatch) -> None:
     """``jm-wallet rescan`` is a Bitcoin Core wallet operation. When the
     configured backend is Neutrino, the command must refuse with a clear

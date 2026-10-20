@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
+import pytest
 from jmcore.cli_common import ResolvedBackendSettings
 from typer.testing import CliRunner
 
@@ -297,6 +298,7 @@ class TestDebugInfoCommand:
         assert "descriptor_wallet" in result.stdout
         assert "signet" in result.stdout
 
+    @pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
     def test_neutrino_backend_unreachable(self) -> None:
         """Neutrino backend gracefully handles unreachable server."""
         result = runner.invoke(
@@ -314,6 +316,7 @@ class TestDebugInfoCommand:
         # Should report unreachable, not crash
         assert "unreachable" in result.stdout or "error" in result.stdout
 
+    @pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
     def test_neutrino_backend_with_mock_server(self) -> None:
         """Neutrino backend shows server info when reachable."""
         with patch("jmwallet.cli.debug_info._get_neutrino_info") as mock_probe:

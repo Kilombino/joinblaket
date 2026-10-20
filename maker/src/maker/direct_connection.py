@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from jmcore.crypto import NickIdentity, verify_signed_privmsg
 from jmcore.directory_client import DirectoryClient
-from jmcore.models import Offer
+from jmcore.models import Offer, wire_network
 from jmcore.network import ONION_HOSTID, TCPConnection
 from jmcore.network import ConnectionError as NetworkConnectionError
 from jmcore.nick_auth import NickAuthMode
@@ -496,9 +496,11 @@ class DirectConnectionMixin:
         # testnet and signet share the same address encoding (bech32 HRP "tb",
         # version byte 0x6F) so the reference implementation advertises "testnet"
         # for both.  Accept either when we are on signet (or testnet).
-        testnet_family = {"testnet", "signet"}
-        our_net = self.config.network.value
-        if peer_network and peer_network != our_net:
+        # XBT build: the peer must announce an XBT network ("xbt", ...); an
+        # absent network or upstream "mainnet" is refused.
+        testnet_family = {wire_network("testnet"), wire_network("signet")}
+        our_net = wire_network(self.config.network)
+        if peer_network != our_net:
             if not (peer_network in testnet_family and our_net in testnet_family):
                 # Close instead of leaving an unbound socket open until the
                 # unauthenticated deadline: the peer fails fast and falls back

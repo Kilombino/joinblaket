@@ -478,7 +478,7 @@ class TestOnionPeerConnection:
             "features": {},
             "location-string": "test.onion:5222",
             "nick": "J5maker",
-            "network": "regtest",
+            "network": "xbt-regtest",  # XBT build wire network
         }
         handshake_response = {
             "type": 793,  # HANDSHAKE
@@ -561,7 +561,7 @@ class TestOnionPeerConnection:
             "features": {"neutrino_compat": True, "peerlist_features": True},
             "location-string": "test.onion:5222",
             "nick": "J5maker",
-            "network": "regtest",
+            "network": "xbt-regtest",  # XBT build wire network
         }
         handshake_response = {"type": 793, "line": json.dumps(handshake_data)}
         mock_connection.receive.return_value = json.dumps(handshake_response).encode()
@@ -601,7 +601,7 @@ class TestOnionPeerConnection:
             "features": {},
             "location-string": "test.onion:5222",
             "nick": "J5maker",
-            "network": "regtest",
+            "network": "xbt-regtest",  # XBT build wire network
         }
         handshake_response = {"type": 793, "line": json.dumps(handshake_data)}
         mock_connection.receive.return_value = json.dumps(handshake_response).encode()
@@ -676,7 +676,7 @@ class TestOnionPeerConnection:
                     "proto-ver": 5,
                     "directory": False,
                     "nick": "J5maker",
-                    "network": "regtest",
+                    "network": "xbt-regtest",  # XBT build wire network
                 }
             ),
         }
@@ -717,7 +717,7 @@ class TestOnionPeerConnection:
             "features": {},
             "location-string": "test.onion:5222",
             "nick": "J5maker",
-            "network": "regtest",
+            "network": "xbt-regtest",  # XBT build wire network
         }
         handshake_response = {
             "type": 793,

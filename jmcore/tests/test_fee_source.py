@@ -89,15 +89,9 @@ class TestPickFeeRate:
 
 class TestDefaultsAndSentinels:
     def test_default_urls_per_network(self) -> None:
-        mainnet = default_fee_source_urls("mainnet")
-        assert mainnet[0].startswith("http://mempoolhqx4isw62")
-        assert "https://mempool.space/api/v1/fees/recommended" in mainnet
-        assert "https://blockstream.info/api/fee-estimates" in mainnet
-
-        signet = default_fee_source_urls("signet")
-        assert signet[0].endswith(".onion/signet/api/v1/fees/recommended")
-        assert signet[1] == "https://mempool.space/signet/api/v1/fees/recommended"
-        assert default_fee_source_urls("regtest") == []
+        # XBT build: no default external fee sources (they are SHA-256 explorers).
+        for network in ("mainnet", "testnet", "testnet4", "signet", "regtest"):
+            assert default_fee_source_urls(network) == []
 
     def test_disable_sentinels(self) -> None:
         assert is_fee_source_disabled("off") is True

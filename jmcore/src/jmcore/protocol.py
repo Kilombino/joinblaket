@@ -60,6 +60,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 from pydantic.dataclasses import dataclass
 
+from jmcore.models import wire_network
+
 # Protocol version: v5 for full reference implementation compatibility
 # Features are negotiated separately via the features dict
 JM_VERSION = 5
@@ -556,7 +558,8 @@ def create_handshake_request(
         "proto-ver": JM_VERSION,
         "features": features_dict,
         "nick": nick,
-        "network": network,
+        # XBT build: "xbt" on the wire, never "mainnet" (see models.wire_network).
+        "network": wire_network(network),
     }
 
 
@@ -597,7 +600,7 @@ def create_handshake_response(
         "features": features_dict,
         "accepted": accepted,
         "nick": nick,
-        "network": network,
+        "network": wire_network(network),
         "motd": motd,
     }
 

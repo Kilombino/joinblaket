@@ -199,10 +199,10 @@ class TestGetDefaultDirectoryNodes:
     """Tests for get_default_directory_nodes function."""
 
     def test_mainnet_returns_nodes(self):
-        """Mainnet returns the predefined directory nodes."""
+        """XBT build: no predefined (real-Bitcoin) mainnet directory nodes."""
         nodes = get_default_directory_nodes(NetworkType.MAINNET)
         assert nodes == DIRECTORY_NODES_MAINNET
-        assert len(nodes) > 0
+        assert nodes == []
 
     def test_mainnet_returns_copy(self):
         """Mainnet returns a copy, not the original list."""
@@ -211,10 +211,10 @@ class TestGetDefaultDirectoryNodes:
         assert "extra.onion:5222" not in get_default_directory_nodes(NetworkType.MAINNET)
 
     def test_signet_returns_nodes(self):
-        """Signet returns signet directory nodes."""
+        """XBT build: no predefined (upstream) signet directory nodes."""
         nodes = get_default_directory_nodes(NetworkType.SIGNET)
         assert nodes == DIRECTORY_NODES_SIGNET
-        assert len(nodes) > 0
+        assert nodes == []
 
     def test_testnet_returns_empty(self):
         """Testnet has no default directory nodes."""

@@ -465,11 +465,27 @@ def resolve_backend_settings(
         resolved_bitcoin_network = settings.network_config.bitcoin_network.value
     else:
         resolved_bitcoin_network = resolved_network
+    # XBT build: one network identity for keys, addresses and the wire
+    # (see WalletConfig.require_single_network_identity).
+    if resolved_bitcoin_network != resolved_network:
+        raise ValueError(
+            f"bitcoin_network ({resolved_bitcoin_network}) must equal network "
+            f"({resolved_network}) in the XBT build"
+        )
 
     # Resolve backend type
     resolved_backend_type = (
         backend_type if backend_type is not None else settings.bitcoin.backend_type
     )
+    # XBT build: only the Bitcoin Core-RPC backend can check that the node is
+    # a BLAKE2b node and look up every input for the unified sighash. Neutrino
+    # (BIP157/158 light client, mempool.space fee sources) is not supported.
+    # (Unknown names are left to the existing per-command validation.)
+    if resolved_backend_type == "neutrino":
+        raise ValueError(
+            f"Unsupported backend {resolved_backend_type!r} in the XBT build; "
+            'use backend_type = "descriptor_wallet" with a Bitcoin Knots BLAKE2b node'
+        )
 
     # Resolve RPC settings
     resolved_rpc_url = rpc_url if rpc_url is not None else settings.bitcoin.rpc_url

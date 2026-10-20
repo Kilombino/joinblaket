@@ -688,10 +688,12 @@ class OnionPeer:
         if is_directory:
             raise OnionPeerConnectionError("Expected non-directory peer")
 
-        # Verify network matches
-        if peer_network != network:
+        # Verify network matches (XBT build: wire value "xbt", never "mainnet")
+        from jmcore.models import wire_network
+
+        if peer_network != wire_network(network):
             raise OnionPeerConnectionError(
-                f"Network mismatch: expected {network}, got {peer_network}"
+                f"Network mismatch: expected {wire_network(network)}, got {peer_network}"
             )
 
         # Record advertised features (e.g., {"neutrino_compat": True}). Used by

@@ -25,7 +25,7 @@ from loguru import logger
 
 from jmcore.btc_script import mk_freeze_script, redeem_script_to_p2wsh_script
 from jmcore.crypto import NickIdentity, verify_fidelity_bond_proof
-from jmcore.models import FidelityBond, Offer, OfferType
+from jmcore.models import FidelityBond, Offer, OfferType, wire_network
 from jmcore.network import (
     ONION_HOSTID,
     TCPConnection,
@@ -647,6 +647,15 @@ class DirectoryClient:
         handshake_response = json.loads(response["line"])
         if not handshake_response.get("accepted", False):
             raise DirectoryClientError("Handshake rejected")
+
+        # XBT build: the directory must be an XBT directory for our network.
+        # An upstream (real-Bitcoin) directory answers "mainnet" and is refused.
+        dir_network = handshake_response.get("network")
+        if dir_network != wire_network(self.network):
+            raise DirectoryClientError(
+                f"Directory network mismatch: expected {wire_network(self.network)}, "
+                f"got {dir_network!r}"
+            )
 
         # Extract directory's version range
         # Reference directories only send "proto-ver" (single value, typically 5)

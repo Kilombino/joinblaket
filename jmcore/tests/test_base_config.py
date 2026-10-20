@@ -186,14 +186,19 @@ class TestWalletConfig:
         assert config.bitcoin_network == NetworkType.TESTNET
 
     def test_explicit_bitcoin_network(self):
-        """Test setting bitcoin_network explicitly (e.g., regtest with testnet protocol)."""
+        """XBT build: bitcoin_network may be set but must equal network."""
         config = WalletConfig(
             mnemonic="test " * 12,
-            network=NetworkType.TESTNET,
+            network=NetworkType.REGTEST,
             bitcoin_network=NetworkType.REGTEST,
         )
-        assert config.network == NetworkType.TESTNET
         assert config.bitcoin_network == NetworkType.REGTEST
+        with pytest.raises(ValueError, match="must equal network"):
+            WalletConfig(
+                mnemonic="test " * 12,
+                network=NetworkType.TESTNET,
+                bitcoin_network=NetworkType.REGTEST,
+            )
 
     def test_full_config(self):
         config = WalletConfig(

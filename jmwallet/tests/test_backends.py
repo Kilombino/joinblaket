@@ -1177,6 +1177,7 @@ class TestNeutrinoBackend:
                 await backend.estimate_fee(3)
         await backend.close()
 
+    @pytest.mark.skip(reason="XBT build: neutrino backend is not supported")
     @pytest.mark.asyncio
     async def test_neutrino_backend_default_fee_source_requires_proxy(self):
         """The third-party default is only auto-enabled over a SOCKS proxy."""

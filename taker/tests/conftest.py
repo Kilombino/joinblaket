@@ -24,3 +24,15 @@ def isolated_default_commitment_history(tmp_path: Path, monkeypatch: pytest.Monk
 def sample_mnemonic() -> str:
     """Test mnemonic (not for production use!)."""
     return SAMPLE_MNEMONIC
+
+
+# XBT build: there are no default directory servers and makers/takers refuse to
+# start without one. Tests that build configs from default settings get a
+# placeholder XBT directory here; tests that pass directories explicitly are
+# unaffected (init/CLI values take precedence over the environment).
+XBT_TEST_DIRECTORY = "xbttestdirectoryxbttestdirectoryxbttestdirectoryxbttestd.onion:5222"
+
+
+@pytest.fixture(autouse=True)
+def _xbt_test_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NETWORK_CONFIG__DIRECTORY_SERVERS", XBT_TEST_DIRECTORY)
