@@ -1489,3 +1489,82 @@ class TestWalletHistory:
         assert snd_entry["source_mixdepth"] == 1
         assert snd_entry["peer_count"] is None
         assert snd_entry["counterparty_nicks"] == ""
+
+
+class TestWatchExport:
+    """GET /watch-export: account keys + own fidelity bonds, no private keys."""
+
+    def test_requires_auth(self, authed_client: tuple[TestClient, str]) -> None:
+        client, _ = authed_client
+        resp = client.get("/api/v1/wallet/test_wallet.jmdat/watch-export")
+        assert resp.status_code == 401
+
+    @patch("jmwalletd.routers.wallet_data.load_registry")
+    def test_exports_xpubs_and_own_bonds(
+        self, mock_load_registry: Mock, authed_client: tuple[TestClient, str]
+    ) -> None:
+        import json
+
+        client, token = authed_client
+        ws = get_daemon_state().wallet_service
+        ws.network = "mainnet"
+        ws.get_account_zpub = Mock(side_effect=lambda md: f"zpub{md}")
+        # 2026-11-01 (timenumber 82) registered, 2027-01-01 (84) only seen as a UTXO,
+        # 2027-02-01 (85) registered but held by a cold signer (address differs).
+        lt82, lt84, lt85 = 1793491200, 1798761600, 1801440000
+        own = {lt82: "bc1qbond82", lt84: "bc1qbond84", lt85: "bc1qderived85"}
+        ws.get_fidelity_bond_address = Mock(side_effect=lambda tn, lt: own[lt])
+        registry = MagicMock()
+        registry.bonds = [
+            MagicMock(address="bc1qbond82", locktime=lt82),
+            MagicMock(address="bc1qcold85", locktime=lt85),
+        ]
+        mock_load_registry.return_value = registry
+        bond_utxo = MagicMock(address="bc1qbond84", locktime=lt84)
+        plain_utxo = MagicMock(address="bc1qplain", locktime=None)
+        ws.utxo_cache = {0: [bond_utxo, plain_utxo], 1: [], 2: [], 3: [], 4: []}
+
+        resp = client.get(
+            "/api/v1/wallet/test_wallet.jmdat/watch-export", headers=_auth_headers(token)
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["network"] == "mainnet"
+        assert body["xpubs"] == ["zpub0", "zpub1", "zpub2", "zpub3", "zpub4"]
+        assert body["bonds"] == [[82, lt82], [84, lt84]]
+        prefix = "kilowallet-jm:v1:"
+        assert body["export"].startswith(prefix)
+        assert json.loads(body["export"][len(prefix) :]) == {
+            "n": "mainnet",
+            "x": body["xpubs"],
+            "b": body["bonds"],
+        }
+        # Never anything secret.
+        assert "mnemonic" not in resp.text and "abandon" not in resp.text
+
+    def test_real_wallet_keys(self, authed_client: tuple[TestClient, str]) -> None:
+        """The zpubs are the BIP84 account keys of the real wallet code."""
+        from jmwallet.wallet.service import WalletService
+
+        client, token = authed_client
+        state = get_daemon_state()
+        real = WalletService(
+            mnemonic="abandon " * 11 + "about",
+            backend=MagicMock(),
+            network="mainnet",
+            mixdepth_count=5,
+            data_dir=state.data_dir,
+        )
+        real.sync_with_registered_bonds = AsyncMock()
+        state.wallet_service = real
+        resp = client.get(
+            "/api/v1/wallet/test_wallet.jmdat/watch-export", headers=_auth_headers(token)
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        # BIP84 test vector (m/84'/0'/0' of "abandon ... about").
+        assert body["xpubs"][0] == (
+            "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs"
+        )
+        assert len(set(body["xpubs"])) == 5
+        assert body["bonds"] == []

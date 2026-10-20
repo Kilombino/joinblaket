@@ -51,6 +51,7 @@ from jmwalletd.models import (
     WalletDisplayResponse,
     WalletHistoryResponse,
     WalletInfo,
+    WatchExportResponse,
     YieldGenReportResponse,
 )
 from jmwalletd.state import DaemonState
@@ -398,6 +399,73 @@ async def get_timelock_address(
         )
 
     return GetAddressResponse(address=address)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/wallet/{walletname}/watch-export
+# ---------------------------------------------------------------------------
+WATCH_EXPORT_PREFIX = "kilowallet-jm:v1:"
+
+
+@router.get("/wallet/{walletname}/watch-export", operation_id="watchexport")
+async def watch_export(
+    walletname: str,
+    _auth: dict[str, Any] = Depends(require_auth),
+    _wallet: None = Depends(require_wallet_match),
+    state: DaemonState = Depends(get_daemon_state),
+) -> WatchExportResponse:
+    """Read-only export to watch this wallet elsewhere (no private keys).
+
+    The account keys of every mixdepth plus every fidelity bond derived from
+    this wallet's own keys: the bonds in its registry (funded or not yet) and
+    any bond UTXO the wallet sees. Bonds held by an external signer (cold
+    storage) are left out: a watcher could not derive their script from the
+    account keys. Calling it again after creating a bond gives the full
+    current set.
+    """
+    import json
+
+    from jmcore.timenumber import timestamp_to_timenumber
+
+    ws = state.wallet_service
+    rescanning, _progress = await state.live_rescan_status()
+    if not rescanning:
+        await ws.sync_with_registered_bonds()
+
+    xpubs = [ws.get_account_zpub(md) for md in range(ws.mixdepth_count)]
+
+    locktimes: set[int] = set()
+    registry = load_registry(state.data_dir, ws.wallet_fingerprint, allow_legacy_fallback=False)
+    for bond in registry.bonds:
+        locktimes.add(int(bond.locktime))
+    for utxos in ws.utxo_cache.values():
+        for u in utxos:
+            if getattr(u, "locktime", None) is not None:
+                locktimes.add(int(u.locktime))
+
+    bonds: list[list[int]] = []
+    for locktime in sorted(locktimes):
+        try:
+            timenumber = timestamp_to_timenumber(locktime)
+        except ValueError:
+            continue
+        # Only bonds of this wallet's hot keys: the address the account key
+        # derives must be the registered one.
+        derived = ws.get_fidelity_bond_address(timenumber, locktime)
+        owned = any(b.address == derived for b in registry.bonds if int(b.locktime) == locktime)
+        owned = owned or any(
+            getattr(u, "address", None) == derived
+            for utxos in ws.utxo_cache.values()
+            for u in utxos
+        )
+        if owned:
+            bonds.append([timenumber, locktime])
+
+    network = str(ws.network)
+    payload = json.dumps({"n": network, "x": xpubs, "b": bonds}, separators=(",", ":"))
+    return WatchExportResponse(
+        network=network, xpubs=xpubs, bonds=bonds, export=WATCH_EXPORT_PREFIX + payload
+    )
 
 
 # ---------------------------------------------------------------------------
