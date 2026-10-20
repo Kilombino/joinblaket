@@ -1,18 +1,25 @@
-# JoinMarket-NG XBT + Jam (Linux). Edit the three RPC lines, then:
+# JoinMarket-NG XBT + Jam (Linux). Edit the two RPC lines, then:
 #   docker compose up -d      and open https://localhost:28183
+# Do not use network_mode: host. Only Jam (28183) is published, and only on
+# this computer (127.0.0.1); Tor and the orderbook watcher stay inside.
 services:
   jam-xbt:
-    image: jm-xbt:0.41.0-xbt1          # when published: ghcr.io/kilombino/jam-xbt@sha256:<digest>
+    image: ghcr.io/kilombino/jam-xbt:0.41.0-xbt1   # when published: pin @sha256:<digest>
     container_name: jam-xbt
-    network_mode: host                 # reaches the node at 127.0.0.1; Jam only on 127.0.0.1:28183
     restart: always
     stop_grace_period: 1m              # let a running CoinJoin finish cleanly
+    ports:
+      - "127.0.0.1:28183:28183"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # = this computer, seen from the container
     environment:
-      BITCOIN_RPC_URL: http://127.0.0.1:8332   # your Bitcoin Knots BLAKE2b node
+      # Your Bitcoin Knots BLAKE2b node. On this computer its bitcoin.conf needs
+      #   rpcbind=127.0.0.1  rpcbind=172.17.0.1  rpcallowip=127.0.0.1  rpcallowip=172.16.0.0/12
+      BITCOIN_RPC_URL: http://host.docker.internal:8332
       BITCOIN_RPC_USER: change-me
       BITCOIN_RPC_PASS: change-me
     volumes:
-      - jam-xbt-data:/data             # wallets live here: back it up
+      - jam-xbt-datos:/data            # wallets live here: back it up
 
 volumes:
-  jam-xbt-data:
+  jam-xbt-datos:

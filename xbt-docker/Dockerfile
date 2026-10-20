@@ -6,6 +6,9 @@
 # Everything is pinned: base image by digest, Node.js tarball by sha256,
 # Debian packages by snapshot, Python deps by hash (--require-hashes through
 # the hashed requirements.txt files), Jam deps by package-lock.json integrity.
+# Reproducible: build.sh passes SOURCE_DATE_EPOCH (= the commit time) and
+# exports with rewrite-timestamp=true, so two builds of the same commits give
+# the same image digest (see XBT.md, "Reproducible image").
 # =============================================================================
 ARG PYTHON_VERSION=3.14
 ARG PYTHON_SLIM_DIGEST=sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
@@ -22,6 +25,7 @@ ARG NODE_SHA256_ARM64=afc7a004018485092ac8985b817b0d5684472bd9472e0b57d2ab88737e
 # =============================================================================
 FROM python:${PYTHON_VERSION}-slim@${PYTHON_SLIM_DIGEST} AS jamui
 ARG TARGETARCH
+ARG SOURCE_DATE_EPOCH
 ARG NODE_VERSION
 ARG NODE_SHA256_AMD64
 ARG NODE_SHA256_ARM64
@@ -109,6 +113,9 @@ RUN if [ -n "$SOURCE_DATE_EPOCH" ]; then export SOURCE_DATE_EPOCH=$SOURCE_DATE_E
 # =============================================================================
 FROM python:${PYTHON_VERSION}-slim@${PYTHON_SLIM_DIGEST} AS runtime
 ARG DEBIAN_SNAPSHOT
+# Exported to every RUN: useradd/adduser (tor's postinst too) then write
+# SOURCE_DATE_EPOCH, not today, as the "last password change" in /etc/shadow.
+ARG SOURCE_DATE_EPOCH
 RUN --mount=type=bind,source=scripts/docker-apt-install.sh,target=/tmp/docker-apt-install.sh \
     sh /tmp/docker-apt-install.sh libsecp256k1-2 libsodium23 tini tor \
     && rm -rf \
@@ -128,14 +135,21 @@ RUN chmod 0755 /etc/jm-xbt /usr/local/lib/jm-xbt \
     && mkdir -p /data && chown 1000:1000 /data && chmod 700 /data
 
 # XBT defaults (override with -e; environment wins over /data/config.toml).
+# Network: only jmwalletd (28183: API + Jam) listens on the container's own
+# interface, so that `-p 127.0.0.1:28183:28183` can reach it. Tor (SOCKS
+# 28185, control 28186), the orderbook watcher (28184) and the maker's onion
+# listener stay on 127.0.0.1 inside the container. Run it on a normal bridge
+# network, never with --network host.
+# Nick authentication: require_verified, our directory supports JMP-0005.
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     HOME=/data \
     JOINMARKET_DATA_DIR=/data \
-    JMWALLETD_HOST=127.0.0.1 \
+    JMWALLETD_HOST=0.0.0.0 \
     BITCOIN__BACKEND_TYPE=descriptor_wallet \
     NETWORK_CONFIG__NETWORK=mainnet \
     NETWORK_CONFIG__DIRECTORY_SERVERS=f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222 \
+    NETWORK_CONFIG__NICK_AUTH_MODE=require_verified \
     NETWORK_CONFIG__NICK_AUTH_DIRECTORY_IDS='{"f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222":"f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222"}' \
     TOR__SOCKS_HOST=127.0.0.1 \
     TOR__SOCKS_PORT=28185 \
@@ -144,7 +158,8 @@ ENV PATH="/opt/venv/bin:$PATH" \
     TOR__COOKIE_PATH=/data/tor/control_auth_cookie \
     ORDERBOOK_WATCHER__HTTP_HOST=127.0.0.1 \
     ORDERBOOK_WATCHER__HTTP_PORT=28184 \
-    OBWATCH_URL=http://127.0.0.1:28184
+    OBWATCH_URL=http://127.0.0.1:28184 \
+    MAKER__ONION_SERVING_HOST=127.0.0.1
 
 USER 1000:1000
 WORKDIR /data
