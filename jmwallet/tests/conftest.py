@@ -119,3 +119,20 @@ def wallet_service(
         network="mainnet",
         mixdepth_count=5,
     )
+
+
+# XBT build: DescriptorWalletBackend checks that the node is Bitcoin Knots
+# BLAKE2b before its first RPC call. Unit tests that fake the RPC transport
+# (httpx mocks) are about other behaviour, so the check is treated as passed
+# here; ``test_xbt_chain_check.py`` exercises the real check.
+@pytest.fixture(autouse=True)
+def _xbt_chain_check_passes(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if request.module.__name__.endswith("test_xbt_chain_check"):
+        return
+
+    async def _verified(self: DescriptorWalletBackend, client: object = None) -> None:
+        self._xbt_chain_verified = True
+
+    monkeypatch.setattr(DescriptorWalletBackend, "_verify_xbt_chain", _verified)

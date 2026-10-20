@@ -145,6 +145,17 @@ def clamp_descriptor_range(low: int, high: int) -> tuple[int, int]:
     return low, high
 
 
+XBT_CHAIN_ERROR = (
+    "Refusing to use this node: it is not a Bitcoin BLAKE2b (XBT) node past the "
+    "fork (no difficulty_blake2b / BLAKE2b header_version at the tip). This "
+    "JoinMarket-NG build only works against Bitcoin Knots BLAKE2b."
+)
+
+
+class XBTChainError(RuntimeError):
+    """The configured node is not a post-fork Bitcoin BLAKE2b (XBT) node."""
+
+
 class DescriptorWalletBackend(BlockchainBackend):
     supports_descriptor_scan: bool = True
     supports_tx_enumeration: bool = True
@@ -218,6 +229,8 @@ class DescriptorWalletBackend(BlockchainBackend):
         # Track if wallet is setup
         self._wallet_loaded = False
         self._descriptors_imported = False
+        # XBT build: set once the node has proven to be Knots BLAKE2b.
+        self._xbt_chain_verified = False
 
         # Wallet creation height hint (set via set_wallet_creation_height).
         self._wallet_creation_height: int | None = None
@@ -386,8 +399,43 @@ class DescriptorWalletBackend(BlockchainBackend):
             ValueError: On RPC errors
             httpx.HTTPError: On connection/timeout errors
         """
+        if not self._xbt_chain_verified:
+            await self._verify_xbt_chain(client)
         result = await self._rpc_call_inner(method, params, client, use_wallet)
         return result
+
+    async def _verify_xbt_chain(self, client: httpx.AsyncClient | None = None) -> None:
+        """XBT build: refuse to talk to anything but a BLAKE2b (XBT) node.
+
+        Upstream never checks chain identity, so pointing it at a SHA-256
+        Bitcoin node would just work. Bitcoin Knots BLAKE2b reports fields no
+        SHA-256 node has: ``difficulty_blake2b`` in ``getblockchaininfo`` and
+        ``header_version`` >= 2 (the BLAKE2b header) in ``getblockheader`` once
+        the fork is active. Both must be present at the tip. Checked before
+        the first RPC call of every backend instance; on failure every call
+        raises :class:`XBTChainError` (fail closed).
+        """
+        info = await self._rpc_call_inner("getblockchaininfo", None, client, use_wallet=False)
+        tip = info.get("bestblockhash") if isinstance(info, dict) else None
+        header = (
+            await self._rpc_call_inner("getblockheader", [tip], client, use_wallet=False)
+            if isinstance(tip, str)
+            else None
+        )
+        header_version = header.get("header_version") if isinstance(header, dict) else None
+        if (
+            not isinstance(info, dict)
+            or "difficulty_blake2b" not in info
+            or type(header_version) is not int
+            or header_version < 2
+        ):
+            logger.error(XBT_CHAIN_ERROR)
+            raise XBTChainError(XBT_CHAIN_ERROR)
+        logger.info(
+            f"XBT chain check passed (chain={info.get('chain')}, "
+            f"height={info.get('blocks')}, header_version={header_version})"
+        )
+        self._xbt_chain_verified = True
 
     async def _rpc_call_inner(
         self,
@@ -2185,10 +2233,17 @@ class DescriptorWalletBackend(BlockchainBackend):
                 sat_per_vbyte = btc_to_sats(btc_per_kb) / 1000
                 return sat_per_vbyte
             else:
-                logger.warning("Fee estimation unavailable, using fallback")
+                # XBT build: say exactly what is being used (normal on regtest
+                # and on a freshly started node without fee history).
+                logger.warning(
+                    "estimatesmartfee returned no feerate; using fallback 1.0 sat/vB. "
+                    "Set a fee_rate explicitly if this is not what you want."
+                )
                 return 1.0
+        except XBTChainError:
+            raise
         except Exception as e:
-            logger.warning(f"Failed to estimate fee: {e}, using fallback")
+            logger.warning(f"Failed to estimate fee: {e}; using fallback 1.0 sat/vB")
             return 1.0
 
     async def get_mempool_min_fee(self) -> float | None:
