@@ -13,6 +13,7 @@
 #             one if it is docker-container, else one named "jam-xbt" is created.
 #   OCI       write an OCI archive to this path instead of loading into Docker
 #             (needed for several platforms at once; prints the digest)
+#   PUSH      1 = push to the registry (the tag's) instead of loading or OCI
 #   NO_CACHE  1 = --no-cache
 set -eu
 REPO=$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)
@@ -44,7 +45,9 @@ JAM_COMMIT=$(git -C "$JAM_DIR" rev-parse "$JAM_REF")
 EPOCH=$(git -C "$REPO" log -1 --format=%ct)
 echo "joinmarket-ng $JM_COMMIT, jam $JAM_COMMIT, platform $PLATFORM, SOURCE_DATE_EPOCH $EPOCH, builder $BUILDER"
 
-if [ -n "$OCI" ]; then
+if [ -n "${PUSH:-}" ]; then
+    output="type=image,name=$TAG,push=true,rewrite-timestamp=true"
+elif [ -n "$OCI" ]; then
     output="type=oci,dest=$OCI,name=$TAG,rewrite-timestamp=true"
 else
     output="type=docker,name=$TAG,rewrite-timestamp=true"
@@ -65,7 +68,9 @@ SOURCE_DATE_EPOCH=$EPOCH docker buildx build --builder "$BUILDER" \
     --output "$output" \
     -f "$work/jm/xbt-docker/Dockerfile" "$work/jm"
 
-if [ -n "$OCI" ]; then
+if [ -n "${PUSH:-}" ]; then
+    docker buildx imagetools inspect "$TAG" | sed -n '1,3p'
+elif [ -n "$OCI" ]; then
     # The digest a registry will show for this tag (index if several platforms).
     echo "image digest: $(tar -xOf "$OCI" index.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["manifests"][0]["digest"])')"
 else
