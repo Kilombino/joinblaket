@@ -163,6 +163,8 @@ async def test_backend_cache_separates_passphrase_identities(tmp_path: Path) -> 
 
 def test_maker_and_taker_configs_carry_passphrase(tmp_path: Path) -> None:
     settings = JoinMarketSettings()
+    # XBT build: no default directories.
+    settings.network_config.directory_servers = ["testdirectoryfakeaddress.onion:5222"]
     config = build_daemon_maker_config(settings, MNEMONIC, tmp_path, passphrase=PASSPHRASE)
     assert config.passphrase.get_secret_value() == PASSPHRASE
     body = MagicMock(amount_sats=10000, destination="", mixdepth=0, counterparties=4, txfee=None)

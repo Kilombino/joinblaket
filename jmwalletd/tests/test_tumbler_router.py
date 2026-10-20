@@ -605,7 +605,7 @@ class TestStartPlan:
 
         settings = JoinMarketSettings(
             network_config=NetworkSettings(
-                network=NetworkType.SIGNET,
+                network=NetworkType.REGTEST,
                 bitcoin_network=NetworkType.REGTEST,
                 directory_servers=[directory_server],
                 allow_clearnet_connections=allow_clearnet_connections,
@@ -693,7 +693,7 @@ class TestStartPlan:
         asyncio.run(CapturingRunner.context.maker_factory(MagicMock()))
         maker_config = maker_bot_cls.call_args.kwargs["config"]
         assert isinstance(maker_config, MakerConfig)
-        assert maker_config.network == NetworkType.SIGNET
+        assert maker_config.network == NetworkType.REGTEST
         assert maker_config.bitcoin_network == NetworkType.REGTEST
         assert maker_config.data_dir == get_daemon_state().data_dir
         assert maker_config.directory_servers == [directory_server]
@@ -963,7 +963,7 @@ class TestBuildTumblerTakerConfig:
         settings = JoinMarketSettings()
         settings.data_dir = Path("/tmp/jm-test")
         settings.network_config.network = NetworkType.REGTEST
-        settings.network_config.directory_servers = []
+        settings.network_config.directory_servers = ["directory.internal:5222"]
         settings.network_config.nick_auth_directory_ids = {
             "directory.internal:5222": "test:tumbler-directory"
         }

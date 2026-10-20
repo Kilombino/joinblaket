@@ -448,7 +448,7 @@ class TestDoCoinjoin:
         # same attribute surface (backend, wallet, tor, taker) as production.
         mock_settings = JoinMarketSettings()
         mock_settings.data_dir = Path("/tmp/jm-test")
-        mock_settings.network_config.network = NetworkType.SIGNET
+        mock_settings.network_config.network = NetworkType.REGTEST
         mock_settings.network_config.bitcoin_network = NetworkType.REGTEST
         mock_settings.network_config.directory_servers = expected_dirs
         mock_settings.bitcoin.backend_type = "descriptor_wallet"
@@ -477,7 +477,7 @@ class TestDoCoinjoin:
 
         _, kwargs = mock_config.call_args
         assert kwargs["mnemonic"].get_secret_value() == state.wallet_mnemonic
-        assert kwargs["network"] == NetworkType.SIGNET
+        assert kwargs["network"] == NetworkType.REGTEST
         assert kwargs["bitcoin_network"] == NetworkType.REGTEST
         assert kwargs["directory_servers"] == expected_dirs
         assert kwargs["socks_host"] == "127.0.0.1"
@@ -533,7 +533,7 @@ class TestDoCoinjoin:
 
         mock_settings = JoinMarketSettings()
         mock_settings.data_dir = Path("/tmp/jm-test")
-        mock_settings.network_config.network = NetworkType.SIGNET
+        mock_settings.network_config.network = NetworkType.REGTEST
         mock_settings.network_config.bitcoin_network = NetworkType.REGTEST
         mock_settings.network_config.directory_servers = ["testdirectoryfakeaddress.onion:5222"]
         mock_settings.bitcoin.backend_type = "descriptor_wallet"
@@ -714,7 +714,7 @@ class TestStopCoinjoin:
 
         mock_settings = JoinMarketSettings()
         mock_settings.data_dir = Path("/tmp/jm-test")
-        mock_settings.network_config.network = NetworkType.SIGNET
+        mock_settings.network_config.network = NetworkType.REGTEST
         mock_settings.network_config.bitcoin_network = NetworkType.REGTEST
         mock_settings.network_config.directory_servers = ["testdirectoryfakeaddress.onion:5222"]
         mock_settings.bitcoin.backend_type = "descriptor_wallet"
@@ -800,7 +800,7 @@ class TestStopCoinjoin:
 
         mock_settings = JoinMarketSettings()
         mock_settings.data_dir = Path("/tmp/jm-test")
-        mock_settings.network_config.network = NetworkType.SIGNET
+        mock_settings.network_config.network = NetworkType.REGTEST
         mock_settings.network_config.bitcoin_network = NetworkType.REGTEST
         mock_settings.network_config.directory_servers = ["testdirectoryfakeaddress.onion:5222"]
         mock_settings.bitcoin.backend_type = "descriptor_wallet"
@@ -867,7 +867,7 @@ class TestBuildCoinjoinTakerConfig:
         settings = JoinMarketSettings()
         settings.data_dir = Path("/tmp/jm-test")
         settings.network_config.network = NetworkType.REGTEST
-        settings.network_config.directory_servers = []
+        settings.network_config.directory_servers = ["directory.internal:5222"]
         settings.bitcoin.backend_type = "descriptor_wallet"
         settings.tor.socks_host = "127.0.0.1"
         settings.tor.socks_port = 9050
@@ -1209,7 +1209,7 @@ class TestStartMaker:
 
         expected_dirs = ["testdirectoryfakeaddress.onion:5222"]
         mock_settings = JoinMarketSettings()
-        mock_settings.network_config.network = NetworkType.SIGNET
+        mock_settings.network_config.network = NetworkType.REGTEST
         mock_settings.network_config.bitcoin_network = NetworkType.REGTEST
         mock_settings.network_config.directory_servers = expected_dirs
         mock_settings.network_config.allow_clearnet_connections = allow_clearnet_connections
@@ -1289,7 +1289,7 @@ class TestStartMaker:
         maker_config = mock_maker_cls.call_args.kwargs["config"]
         assert isinstance(maker_config, MakerConfig)
         assert maker_config.mnemonic.get_secret_value() == state.wallet_mnemonic
-        assert maker_config.network == NetworkType.SIGNET
+        assert maker_config.network == NetworkType.REGTEST
         assert maker_config.bitcoin_network == NetworkType.REGTEST
         assert maker_config.data_dir == state.data_dir
         assert maker_config.directory_servers == expected_dirs
