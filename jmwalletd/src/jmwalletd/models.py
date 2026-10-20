@@ -226,14 +226,16 @@ class WatchExportResponse(BaseModel):
     and no private key: the BIP84 account key of every mixdepth (zpub on
     mainnet, vpub on test networks) and every fidelity bond this wallet's own
     keys hold, as ``[timenumber, locktime]`` (the bond key is
-    ``m/84'/coin'/0'/2/<timenumber>``). ``export`` is the same data as one
+    ``m/84'/coin'/0'/2/<timenumber>``), and the master key fingerprint (8 hex
+    digits) that signers look for in a PSBT. ``export`` is the same data as one
     compact, versioned string for a QR code:
-    ``kilowallet-jm:v1:{"n":<network>,"x":[<zpub>, ...],"b":[[tn, locktime], ...]}``.
+    ``kilowallet-jm:v1:{"n":<network>,"x":[<zpub>, ...],"b":[[tn, locktime], ...],"f":<fp>}``.
     """
 
     network: str
     xpubs: list[str]
     bonds: list[list[int]]
+    fingerprint: str
     export: str
 
 

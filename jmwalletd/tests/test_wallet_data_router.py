@@ -1509,6 +1509,7 @@ class TestWatchExport:
         ws = get_daemon_state().wallet_service
         ws.network = "mainnet"
         ws.get_account_zpub = Mock(side_effect=lambda md: f"zpub{md}")
+        ws.master_key = MagicMock(fingerprint=bytes.fromhex("0badf00d"))
         # 2026-11-01 (timenumber 82) registered, 2027-01-01 (84) only seen as a UTXO,
         # 2027-02-01 (85) registered but held by a cold signer (address differs).
         lt82, lt84, lt85 = 1793491200, 1798761600, 1801440000
@@ -1532,12 +1533,14 @@ class TestWatchExport:
         assert body["network"] == "mainnet"
         assert body["xpubs"] == ["zpub0", "zpub1", "zpub2", "zpub3", "zpub4"]
         assert body["bonds"] == [[82, lt82], [84, lt84]]
+        assert body["fingerprint"] == "0badf00d"
         prefix = "kilowallet-jm:v1:"
         assert body["export"].startswith(prefix)
         assert json.loads(body["export"][len(prefix) :]) == {
             "n": "mainnet",
             "x": body["xpubs"],
             "b": body["bonds"],
+            "f": "0badf00d",
         }
         # Never anything secret.
         assert "mnemonic" not in resp.text and "abandon" not in resp.text
@@ -1568,3 +1571,5 @@ class TestWatchExport:
         )
         assert len(set(body["xpubs"])) == 5
         assert body["bonds"] == []
+        # BIP32 master fingerprint of "abandon ... about".
+        assert body["fingerprint"] == "73c5da0a"

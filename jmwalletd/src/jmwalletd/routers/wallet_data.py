@@ -462,9 +462,18 @@ async def watch_export(
             bonds.append([timenumber, locktime])
 
     network = str(ws.network)
-    payload = json.dumps({"n": network, "x": xpubs, "b": bonds}, separators=(",", ":"))
+    # Master key fingerprint: a zpub cannot tell it, and a signer needs it to
+    # find its own keys in a PSBT built by the watcher.
+    fingerprint = ws.master_key.fingerprint.hex()
+    payload = json.dumps(
+        {"n": network, "x": xpubs, "b": bonds, "f": fingerprint}, separators=(",", ":")
+    )
     return WatchExportResponse(
-        network=network, xpubs=xpubs, bonds=bonds, export=WATCH_EXPORT_PREFIX + payload
+        network=network,
+        xpubs=xpubs,
+        bonds=bonds,
+        fingerprint=fingerprint,
+        export=WATCH_EXPORT_PREFIX + payload,
     )
 
 
