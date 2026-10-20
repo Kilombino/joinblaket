@@ -112,6 +112,38 @@ and `[tor] control_enabled = false`; see "How this was tested".
   applies, and the wire identifiers differ per network).
 * Upstream docs, README and help texts still describe Bitcoin defaults.
 
+## Reproducible image
+
+`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.41.0-xbt1` from
+`git archive` of this repository and of the Jam fork (committed files only),
+with every input pinned (base image digest, Debian snapshot, Node.js sha256,
+`pip --require-hashes`, `npm ci` integrity), `SOURCE_DATE_EPOCH` = the time
+of the joinmarket-ng commit, file times clamped (`rewrite-timestamp=true`)
+and no provenance/SBOM attestations. Two builds of the same commits give the
+same digest:
+
+```sh
+cd joinmarket-ng                      # branch xbt; ../jam-xbt on branch xbt
+OCI=/tmp/a.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
+OCI=/tmp/b.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
+# both end with the same "image digest: sha256:…"
+# both architectures at once (needs QEMU/binfmt for arm64), as published:
+PLATFORM=linux/amd64,linux/arm64 OCI=/tmp/multi.tar xbt-docker/build.sh ../jam-xbt
+# compare with the registry (the digest of the tag's index):
+docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.41.0-xbt1
+```
+
+Without `OCI` the image is loaded into Docker and `build.sh` prints its id
+(the config digest); compare it with
+`docker image inspect --format '{{.Id}}'` of the pulled image for the same
+platform.
+
+The container runs on an ordinary bridge network: only jmwalletd (28183,
+API + Jam) listens on the container interface; Tor (SOCKS 28185, control
+28186), the orderbook watcher (28184) and the maker's onion listener stay on
+127.0.0.1 inside it. Publish `-p 127.0.0.1:28183:28183` and never use
+`--network host`. Nick authentication defaults to `require_verified`.
+
 ## Verifying the build
 
 ```sh

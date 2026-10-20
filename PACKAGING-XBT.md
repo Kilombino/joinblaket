@@ -30,18 +30,22 @@ Salida: `dist/` (≈5 MB).
 | `jm-orderbook-watcher` (o `python -m orderbook_watcher.main`) | 127.0.0.1:28184 HTTP | Jam muestra el libro de órdenes a través de jmwalletd (`/obwatch/*`); `OBWATCH_URL=http://127.0.0.1:28184` |
 | `jmwalletd` | 28183 | API `/api/v1`, websocket `/jmws`, y sirve Jam si existe `/usr/share/jmwalletd/jam/index.html`. Lanza dentro de sí el taker, el maker y el tumbler cuando Jam los pide |
 
-Puertos internos fuera de los habituales (9050/9051/8000) a propósito: en
-Linux el contenedor va con `--network host` para llegar al nodo en
-127.0.0.1 y no debe chocar con un Tor del sistema ni con otro servicio en 8000.
+Puertos internos fuera de los habituales (9050/9051/8000) para no chocar con
+nada. Todo escucha en 127.0.0.1 dentro del contenedor salvo jmwalletd
+(28183, `JMWALLETD_HOST=0.0.0.0` en la imagen): es lo único que se publica
+(`-p 127.0.0.1:28183:28183` en Linux; el proxy en StartOS/Umbrel). En Linux
+el contenedor va en red puente, **no** `--network host`; llega al nodo por
+`host.docker.internal` (el nodo con `rpcbind=172.17.0.1` y
+`rpcallowip=172.16.0.0/12`). Nick-auth: `require_verified` por defecto.
 
 Supervisor: el `jmwalletd/rootfs/etc/s6-overlay` de upstream ya define `tor`,
 `tor-ready`, `obwatcher` y `jmwalletd-svc`; se reutiliza tal cual.
 
 TLS: jmwalletd genera un certificado propio en `<datos>/ssl/`. Detrás del
-proxy de StartOS/Umbrel conviene `JMWALLETD_NO_TLS=true` y
-`JMWALLETD_HOST=0.0.0.0` (solo en la red interna del contenedor; el proxy de
-la plataforma pone TLS/autenticación). jmwalletd avisa en el log de que es
-HTTP plano: es lo esperado ahí. En Linux suelto se deja TLS y 127.0.0.1.
+proxy de StartOS/Umbrel va `JMWALLETD_NO_TLS=true` (el proxy de la
+plataforma pone TLS y, en Umbrel, la contraseña de Umbrel). jmwalletd avisa
+en el log de que es HTTP plano: es lo esperado ahí. En Linux suelto se deja
+TLS.
 
 ## Configuración de jmwalletd
 
@@ -194,9 +198,12 @@ directorio real con nick-auth verificado.
    queda en "0 confs" tras minarse (vista del historial de jmwalletd/Jam).
 4. Las variables de entorno mandan sobre `/data/config.toml`: red,
    directorio y puertos de Tor se cambian con `-e`, no editando el fichero.
-5. Falta: publicar (ghcr, repos), arm64, firma del digest.
+5. Falta: publicar (ghcr, repos, registry.kilombino.com, umbrel-store) y
+   firmar el digest. Paquetes preparados: `~/Projects/startos/jam-xbt-startos`
+   (s9pk x86_64/aarch64) y `kilombino-jam-xbt` en la tienda Umbrel.
 
 ---
 
-Tutorial para Linux: `TUTORIAL-LINUX-ES.md` (capturas en `tutorial-shots/`,
-regtest, interfaz en español, palabras de la frase tapadas).
+Tutoriales: `TUTORIAL-LINUX-ES.md` (capturas en `tutorial-shots/`, regtest,
+interfaz en español, palabras de la frase tapadas), `TUTORIAL-STARTOS-ES.md`
+y `TUTORIAL-UMBREL-ES.md`.

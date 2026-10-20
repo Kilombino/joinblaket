@@ -34,21 +34,47 @@ Si no coincide, no sigas.
 git clone -b xbt https://github.com/Kilombino/joinmarket-ng.git
 git clone -b xbt https://github.com/Kilombino/jam.git jam-xbt
 cd joinmarket-ng
-xbt-docker/build.sh ../jam-xbt ghcr.io/kilombino/jam-xbt:0.41.0-xbt1
+xbt-docker/build.sh ../jam-xbt
 ```
 
-## 2. Arranca
+Con los mismos commits sale la misma imagen, bit a bit (ver `XBT.md`,
+"Reproducible image").
+
+## 2. Deja que Jam hable con tu nodo
+
+Jam va dentro de una "caja" (un contenedor) con su propia red. Desde dentro,
+tu ordenador se llama `host.docker.internal` y tiene la dirección
+`172.17.0.1`. Tu nodo tiene que escuchar también ahí.
+
+Añade estas cuatro líneas al `bitcoin.conf` de tu nodo y reinícialo:
+
+```
+rpcbind=127.0.0.1
+rpcbind=172.17.0.1
+rpcallowip=127.0.0.1
+rpcallowip=172.16.0.0/12
+```
+
+(Son direcciones privadas de Docker: nadie de fuera de tu ordenador entra
+por ahí. Si tienes cortafuegos, deja pasar `172.16.0.0/12` al puerto 8332.)
+
+## 3. Arranca
 
 Cambia `TU_USUARIO` y `TU_CONTRASEÑA` por los datos RPC de tu nodo y pega:
 
 ```sh
-docker run -d --name jam-xbt --restart always --network host \
+docker run -d --name jam-xbt --restart always \
+  -p 127.0.0.1:28183:28183 \
+  --add-host host.docker.internal:host-gateway \
   -v jam-xbt-datos:/data \
-  -e BITCOIN_RPC_URL=http://127.0.0.1:8332 \
+  -e BITCOIN_RPC_URL=http://host.docker.internal:8332 \
   -e BITCOIN_RPC_USER=TU_USUARIO \
   -e BITCOIN_RPC_PASS=TU_CONTRASEÑA \
   ghcr.io/kilombino/jam-xbt:0.41.0-xbt1
 ```
+
+**No uses `--network host`**: así solo sale de la caja la página de Jam, y
+solo para este ordenador (`127.0.0.1`). Tor y lo demás se quedan dentro.
 
 Comprueba que ha arrancado:
 
@@ -58,9 +84,10 @@ docker logs jam-xbt | grep preflight
 
 Debe decir `preflight: XBT node OK`. Si dice `REFUSING TO START`, tu nodo
 no es Bitcoin BLAKE2b o no es mainnet: Jam no arranca para proteger tus
-monedas.
+monedas. Si dice `waiting for node`, revisa el paso 2 (y que el nodo se
+haya reiniciado después de Docker: si arrancó antes, no ve `172.17.0.1`).
 
-## 3. Abre Jam
+## 4. Abre Jam
 
 En el navegador del mismo ordenador: **<https://localhost:28183>**
 
@@ -73,7 +100,7 @@ icono de idioma o en **Ajustes → Idioma**. Abajo a la derecha debe poner
 
 ![Bienvenida](tutorial-shots/01-bienvenida.png)
 
-## 4. Crea tu cartera
+## 5. Crea tu cartera
 
 1. **Crear cartera nueva** → elige un nombre y una contraseña → **Crear**.
 
@@ -90,7 +117,7 @@ icono de idioma o en **Ajustes → Idioma**. Abajo a la derecha debe poner
 
    ![Verificar frase](tutorial-shots/05-verificar-frase.png)
 
-## 5. Recibe
+## 6. Recibe
 
 **Recibir → Mostrar dirección** y envía XBT a esa dirección (empieza por
 `bc1`). Tu cartera tiene 5 **botes**; lo que recibes entra en el primero.
@@ -99,7 +126,7 @@ icono de idioma o en **Ajustes → Idioma**. Abajo a la derecha debe poner
 
 ![Cartera con fondos](tutorial-shots/09-cartera-con-fondos.png)
 
-## 6. Mezcla (enviar con CoinJoin)
+## 7. Mezcla (enviar con CoinJoin)
 
 Las monedas necesitan **5 confirmaciones** antes de poder mezclarlas.
 
@@ -116,7 +143,7 @@ Las monedas necesitan **5 confirmaciones** antes de poder mezclarlas.
 
 Cuantas más vueltas des (de bote en bote), más privacidad.
 
-## 7. Gana (prestar liquidez)
+## 8. Gana (prestar liquidez)
 
 **Ganar → Iniciar**. Tus monedas se ofrecen a otros para sus CoinJoins; nunca
 salen de tu cartera. Sin bono de fidelidad la oferta tiene que ser
@@ -135,7 +162,7 @@ encendido para participar.
   ```
   Aun así, lo importante son **las 12 palabras en papel**.
 - Actualizar: descarga la imagen nueva, comprueba su `sha256`, y luego
-  `docker rm -f jam-xbt` y repite el paso 2 (tus datos no se borran).
+  `docker rm -f jam-xbt` y repite el paso 3 (tus datos no se borran).
 
 ## Seguridad
 
@@ -151,6 +178,8 @@ encendido para participar.
   `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
   (por Tor, dentro del contenedor).
 - Jam solo escucha en este ordenador (`127.0.0.1`). No abras el puerto 28183
-  a Internet.
+  a Internet ni arranques el contenedor con `--network host`.
+- Jam solo habla con directorios que demuestran quiénes son (autenticación
+  de nick verificada).
 
 ¿Algo falla? <https://github.com/Kilombino/joinmarket-ng/issues>
