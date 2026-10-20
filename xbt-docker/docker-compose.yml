@@ -4,7 +4,7 @@
 # this computer (127.0.0.1); Tor and the orderbook watcher stay inside.
 services:
   jam-xbt:
-    image: ghcr.io/kilombino/jam-xbt:0.41.0-xbt1   # when published: pin @sha256:<digest>
+    image: ghcr.io/kilombino/jam-xbt:0.41.0-xbt2   # when published: pin @sha256:<digest>
     container_name: jam-xbt
     restart: always
     stop_grace_period: 1m              # let a running CoinJoin finish cleanly
