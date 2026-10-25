@@ -1,15 +1,15 @@
-# JoinMarket-NG for Bitcoin BLAKE2b (XBT)
+# JoinMarket-NG for Bitcoin BLAKE2b (BTC)
 
 This branch (`xbt`) is a small, auditable patch on top of upstream
 JoinMarket-NG **0.41.0** (tag `0.41.0`, commit
 `66d9eea388e3f7a7ac0203cbcfcc5a44a91559e8`) that makes it safe to run
-CoinJoins on the Bitcoin BLAKE2b chain ("XBT", the fork of Bitcoin at height
-961640 whose node is Bitcoin Knots with BLAKE2b proof of work).
+CoinJoins on the Bitcoin BLAKE2b chain (BTC, which moved to BLAKE2b proof of
+work at height 961640; its node is Bitcoin Knots with BLAKE2b proof of work).
 
 Upstream works against a Knots-BLAKE2b node unchanged, and that is the
 problem: it would happily join the real-Bitcoin (SHA-256) JoinMarket, sign
 replayable transactions and trust whatever node it is pointed at. This build
-closes those holes and is **XBT-only**: it cannot be used on the SHA-256 chain.
+closes those holes and is **BLAKE2b-only**: it cannot be used on the SHA-256 chain.
 
 ## What changes and why
 
@@ -20,7 +20,7 @@ closes those holes and is **XBT-only**: it cannot be used on the SHA-256 chain.
 | Network identity | `network` (protocol) and `bitcoin_network` (addresses) may differ; `jm-wallet` derives from the former, maker/taker from the latter | They must be equal (checked in `WalletConfig` and CLI backend resolution), so every component derives the same keys. Addresses stay mainnet style: `bc1…`, `m/84'/0'/…`. | Consistent wallets across `jm-wallet`, `jm-maker`, `jm-taker`; XBT shares Bitcoin's address formats. |
 | Chain check | None | Before its first RPC call the descriptor-wallet backend requires `difficulty_blake2b` in `getblockchaininfo` and `header_version >= 2` in `getblockheader(tip)`. Anything else raises `XBTChainError` on every call (fail closed). | Pointing the wallet at a SHA-256 node (or a BLAKE2b node before the fork) must not work. |
 | Backends | `descriptor_wallet`, `neutrino` | `descriptor_wallet` only | Neutrino cannot check chain identity, cannot look up foreign inputs, and its fee sources are SHA-256 explorers. |
-| Fee sources | Neutrino fee estimates from mempool.space / blockstream onions + clearnet | No default external fee sources. Fees come from the node's `estimatesmartfee`; when it has no estimate the 1 sat/vB fallback is logged explicitly. | SHA-256 mempool fees say nothing about the XBT mempool, and the requests leak. |
+| Fee sources | Neutrino fee estimates from mempool.space / blockstream onions + clearnet | No default external fee sources. Fees come from the node's `estimatesmartfee`; when it has no estimate the 1 sat/vB fallback is logged explicitly. | SHA-256 mempool fees say nothing about the BLAKE2b mempool, and the requests leak. |
 | Signatures | BIP-143 `SIGHASH_ALL` (0x01) | Every input this code signs (taker, maker, `jm-wallet send`, PSBT signing, hot fidelity-bond spends) uses the **unified sighash 0x21** (`SIGHASH_UNIFIED \| SIGHASH_ALL`). Verification of counterparties' signatures accepts **only** 0x21; a plain 0x01 signature is rejected, so no replayable input can enter the CoinJoin. | A 0x21 signature is valid only on the BLAKE2b chain, so the transaction cannot be replayed on the SHA-256 chain. |
 | Maker input lookup | Looking up other participants' inputs is best effort (only for the fee-floor check) | The maker looks up the amount and scriptPubKey of **every** input (own wallet, then `gettxout` on its own node) and refuses to sign if any lookup fails. | The unified sighash commits to all inputs' amounts and scripts; signing over values not checked on our own node would be signing blind. |
 
@@ -45,7 +45,7 @@ It is verified:
   0x01, or a signature committing to a wrong amount for the *other* input, is
   rejected.
 
-## Configuration for XBT
+## Configuration for the BLAKE2b chain
 
 `~/.joinmarket-ng/config.toml` (or `$JOINMARKET_DATA_DIR/config.toml`):
 
@@ -57,9 +57,9 @@ rpc_user = "youruser"
 rpc_password = "yourpassword"
 
 [network_config]
-network = "mainnet"                         # = XBT; announces "xbt" on the wire
+network = "mainnet"                         # = BTC on BLAKE2b; announces "xbt" on the wire
 # bitcoin_network, if set, must also be "mainnet"
-directory_servers = [                       # REQUIRED: XBT directories only
+directory_servers = [                       # REQUIRED: BLAKE2b directories only
   "yourxbtdirectory56charsonionaddressxxxxxxxxxxxxxxxxxxxxx.onion:5222",
 ]
 
@@ -73,9 +73,9 @@ socks_port = 9050
 # fee_rate = 2.0                            # optional: fixed sat/vB instead of estimatesmartfee
 ```
 
-Running an XBT directory: `jm-directory-server` with `network = "mainnet"`
+Running a BLAKE2b directory: `jm-directory-server` with `network = "mainnet"`
 answers only `"xbt"` handshakes. There is no built-in list in the code; the
-Docker image (`xbt-docker/`) defaults to the XBT directory
+Docker image (`xbt-docker/`) defaults to the BLAKE2b directory
 `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
 (nick-auth directory id: the same `host:port`). The image also makes takers use only makers with a
 fidelity bond: `bondless_makers_allowance = 0`, which in this build removes
@@ -117,7 +117,7 @@ and `[tor] control_enabled = false`; see "How this was tested".
 * **Fees**: with no external sources, a node without fee history falls back to
   1 sat/vB (logged as a warning). Set `fee_rate` explicitly if that matters.
 * The chain check identifies a *BLAKE2b node past the fork*; it does not tell
-  XBT mainnet from another BLAKE2b network (the usual `network`/`chain` setup
+  BTC mainnet from another BLAKE2b network (the usual `network`/`chain` setup
   applies, and the wire identifiers differ per network).
 * Upstream docs, README and help texts still describe Bitcoin defaults.
 
