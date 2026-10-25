@@ -1,7 +1,7 @@
 # Jam XBT en StartOS
 
 Jam es una cartera con interfaz web para hacer CoinJoin en Bitcoin BLAKE2b
-(XBT). En StartOS no hay nada que configurar.
+(BTC). En StartOS no hay nada que configurar.
 
 ## Instalar
 

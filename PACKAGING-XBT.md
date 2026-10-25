@@ -53,7 +53,7 @@ Todo va en `<datos>/config.toml` o en variables `SECCION__CAMPO`:
 
 ```toml
 [bitcoin]
-backend_type = "descriptor_wallet"      # único admitido en XBT
+backend_type = "descriptor_wallet"      # único admitido en BLAKE2b
 rpc_url = "http://NODO:8332"
 rpc_user = "…"
 rpc_password = "…"
@@ -139,7 +139,7 @@ responde, el log dice `XBT chain check passed` y el watcher ve el directorio.
 - Interfaz `ui`: puerto 28183, tipo `ui`, con `JMWALLETD_NO_TLS=true`
   (StartOS pone TLS en `.local` y `.onion`).
 - Volumen `main` → `/data`. Copia de seguridad: `main` excluyendo `tor/`, `ssl/`.
-- Configuración (acciones): directorio(s) XBT (por defecto el nuestro),
+- Configuración (acciones): directorio(s) BLAKE2b (por defecto el nuestro),
   `minimum_makers`, comisiones máximas; nada más.
 - Salud: `GET /api/v1/session` (200) y que exista el SOCKS de Tor.
 - Tor: el del contenedor (no hace falta el del sistema). El maker publica su
@@ -177,8 +177,8 @@ directorio real con nick-auth verificado.
 
 ## Decisiones tomadas
 
-1. Directorio XBT: `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
-   (el directorio XBT de Kilombino). Va por defecto en la imagen,
+1. Directorio BLAKE2b: `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
+   (el directorio BLAKE2b de Kilombino). Va por defecto en la imagen,
    con `nick_auth_directory_ids` = el mismo `host:port`.
 2. Solo makers **con bono de fidelidad**: `bondless_makers_allowance = 0`
    en la imagen (el código XBT descarta toda oferta sin bono y el CoinJoin

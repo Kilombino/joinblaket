@@ -1,7 +1,7 @@
 # Jam XBT en Umbrel
 
 Jam es una cartera con interfaz web para hacer CoinJoin en Bitcoin BLAKE2b
-(XBT). En Umbrel no hay nada que configurar. Necesitas umbrelOS 1.3 o
+(BTC). En Umbrel no hay nada que configurar. Necesitas umbrelOS 1.3 o
 posterior.
 
 ## Instalar

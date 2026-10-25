@@ -2,7 +2,7 @@
 
 Jam es una cartera con interfaz web para hacer CoinJoin (mezclar tus monedas
 con las de otros para ganar privacidad). Esta versión solo funciona en
-Bitcoin BLAKE2b (XBT).
+Bitcoin BLAKE2b (BTC).
 
 ## Qué necesitas
 
@@ -119,7 +119,7 @@ icono de idioma o en **Ajustes → Idioma**. Abajo a la derecha debe poner
 
 ## 6. Recibe
 
-**Recibir → Mostrar dirección** y envía XBT a esa dirección (empieza por
+**Recibir → Mostrar dirección** y envía BTC a esa dirección (empieza por
 `bc1`). Tu cartera tiene 5 **botes**; lo que recibes entra en el primero.
 
 ![Recibir](tutorial-shots/08-recibir.png)
@@ -149,7 +149,7 @@ Cuantas más vueltas des (de bote en bote), más privacidad.
 
 ## 8. Gana (prestar liquidez): necesitas un bono de fidelidad
 
-En XBT los demás **solo eligen a quien tiene un bono de fidelidad**. Sin
+Aquí los demás **solo eligen a quien tiene un bono de fidelidad**. Sin
 bono, tu oferta nunca se acepta (Jam te lo avisa en **Ganar**).
 
 Un bono es un depósito que **bloquea tus monedas hasta una fecha que tú
@@ -192,7 +192,7 @@ Los bonos se crean con la cartera de Jam (firma 0x21, como todo).
   con cualquier otro.
 - Todas las firmas usan **0x21**: así tus transacciones no se pueden
   repetir en la cadena SHA-256.
-- El directorio XBT es
+- El directorio BLAKE2b es
   `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
   (por Tor, dentro del contenedor).
 - Jam solo escucha en este ordenador (`127.0.0.1`). No abras el puerto 28183
