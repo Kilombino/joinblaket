@@ -142,3 +142,18 @@ class TestPerWalletDescriptorBackend:
             pytest.raises(ValueError, match="requires either a mnemonic or a wallet_service"),
         ):
             await get_backend(tmp_path)
+
+
+class TestXBTNeutrinoRefused:
+    """XBT build: jmwalletd must not build a Neutrino backend."""
+
+    @pytest.mark.asyncio
+    async def test_neutrino_backend_is_refused(self, tmp_path: Path) -> None:
+        with (
+            patch(
+                "jmcore.settings.get_settings",
+                return_value=_make_settings_stub(backend_type="neutrino"),
+            ),
+            pytest.raises(ValueError, match="Unsupported backend 'neutrino'"),
+        ):
+            await get_backend(tmp_path, mnemonic="abandon " * 11 + "about", network="regtest")

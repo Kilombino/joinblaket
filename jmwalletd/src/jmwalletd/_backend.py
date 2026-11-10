@@ -90,6 +90,16 @@ async def get_backend(
 
     settings = get_settings()
     backend_type = settings.bitcoin.backend_type
+    # XBT build: jmwalletd builds its backend without resolve_backend_settings,
+    # so refuse Neutrino here too (it cannot check that the node is BLAKE2b,
+    # cannot look up every input for the unified sighash and its fee sources
+    # are SHA-256 explorers).
+    if backend_type == "neutrino":
+        msg = (
+            "Unsupported backend 'neutrino' in the XBT build; use "
+            'backend_type = "descriptor_wallet" with a Bitcoin Knots BLAKE2b node'
+        )
+        raise ValueError(msg)
 
     # Resolve descriptor wallet name for this JM wallet.
     descriptor_wallet_name: str | None = None
