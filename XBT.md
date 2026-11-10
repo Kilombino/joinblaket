@@ -1,8 +1,8 @@
 # JoinMarket-NG for Bitcoin BLAKE2b (BTC)
 
 This branch (`xbt`) is a small, auditable patch on top of upstream
-JoinMarket-NG **0.41.0** (tag `0.41.0`, commit
-`66d9eea388e3f7a7ac0203cbcfcc5a44a91559e8`) that makes it safe to run
+JoinMarket-NG **0.43.0** (tag `0.43.0`, commit
+`0f1e08eafb6b5817b7faba808362a181dbfc52a2`) that makes it safe to run
 CoinJoins on the Bitcoin BLAKE2b chain (BTC, which moved to BLAKE2b proof of
 work at height 961640; its node is Bitcoin Knots with BLAKE2b proof of work).
 
@@ -13,13 +13,13 @@ closes those holes and is **BLAKE2b-only**: it cannot be used on the SHA-256 cha
 
 ## What changes and why
 
-| Area | Upstream 0.41.0 | This build | Why |
+| Area | Upstream 0.43.0 | This build | Why |
 |---|---|---|---|
 | Wire network | Handshakes send `"network": "mainnet"` | Send and require `"xbt"` (`"xbt-regtest"`, `"xbt-testnet"`, `"xbt-signet"` on test networks). Directories, peers (directory-relayed and direct onion connections) and directory replies with any other value are refused. | The handshake network is the only thing separating markets. Without this an XBT wallet joins the Bitcoin market (and vice versa). |
 | Default directories | 8 hardcoded mainnet onions, 3 signet | None. Maker and taker refuse to start: *"No directory servers configured… set directory_servers to XBT directories"*. | The defaults are real-Bitcoin directories. |
 | Network identity | `network` (protocol) and `bitcoin_network` (addresses) may differ; `jm-wallet` derives from the former, maker/taker from the latter | They must be equal (checked in `WalletConfig` and CLI backend resolution), so every component derives the same keys. Addresses stay mainnet style: `bc1…`, `m/84'/0'/…`. | Consistent wallets across `jm-wallet`, `jm-maker`, `jm-taker`; XBT shares Bitcoin's address formats. |
 | Chain check | None | Before its first RPC call the descriptor-wallet backend requires `difficulty_blake2b` in `getblockchaininfo` and `header_version >= 2` in `getblockheader(tip)`. Anything else raises `XBTChainError` on every call (fail closed). | Pointing the wallet at a SHA-256 node (or a BLAKE2b node before the fork) must not work. |
-| Backends | `descriptor_wallet`, `neutrino` | `descriptor_wallet` only | Neutrino cannot check chain identity, cannot look up foreign inputs, and its fee sources are SHA-256 explorers. |
+| Backends | `descriptor_wallet`, `neutrino` | `descriptor_wallet` only (CLIs and the jmwalletd backend factory refuse `neutrino`) | Neutrino cannot check chain identity, cannot look up foreign inputs, and its fee sources are SHA-256 explorers. |
 | Fee sources | Neutrino fee estimates from mempool.space / blockstream onions + clearnet | No default external fee sources. Fees come from the node's `estimatesmartfee`; when it has no estimate the 1 sat/vB fallback is logged explicitly. | SHA-256 mempool fees say nothing about the BLAKE2b mempool, and the requests leak. |
 | Signatures | BIP-143 `SIGHASH_ALL` (0x01) | Every input this code signs (taker, maker, `jm-wallet send`, PSBT signing, hot fidelity-bond spends) uses the **unified sighash 0x21** (`SIGHASH_UNIFIED \| SIGHASH_ALL`). Verification of counterparties' signatures accepts **only** 0x21; a plain 0x01 signature is rejected, so no replayable input can enter the CoinJoin. | A 0x21 signature is valid only on the BLAKE2b chain, so the transaction cannot be replayed on the SHA-256 chain. |
 | Maker input lookup | Looking up other participants' inputs is best effort (only for the fee-floor check) | The maker looks up the amount and scriptPubKey of **every** input (own wallet, then `gettxout` on its own node) and refuses to sign if any lookup fails. | The unified sighash commits to all inputs' amounts and scripts; signing over values not checked on our own node would be signing blind. |
@@ -123,7 +123,7 @@ and `[tor] control_enabled = false`; see "How this was tested".
 
 ## Reproducible image
 
-`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.41.0-xbt3` from
+`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt1` from
 `git archive` of this repository and of the Jam fork (committed files only),
 with every input pinned (base image digest, Debian snapshot, Node.js sha256,
 `pip --require-hashes`, `npm ci` integrity), `SOURCE_DATE_EPOCH` = the time
@@ -139,7 +139,7 @@ OCI=/tmp/b.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
 # both architectures at once (needs QEMU/binfmt for arm64), as published:
 PLATFORM=linux/amd64,linux/arm64 OCI=/tmp/multi.tar xbt-docker/build.sh ../jam-xbt
 # compare with the registry (the digest of the tag's index):
-docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.41.0-xbt3
+docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt1
 ```
 
 Without `OCI` the image is loaded into Docker and `build.sh` prints its id
@@ -157,17 +157,47 @@ API + Jam) listens on the container interface; Tor (SOCKS 28185, control
 
 ```sh
 git clone https://github.com/joinmarket-ng/joinmarket-ng.git && cd joinmarket-ng
-git -c advice.detachedHead=false checkout 0.41.0
-git rev-parse HEAD   # must print 66d9eea388e3f7a7ac0203cbcfcc5a44a91559e8
+git -c advice.detachedHead=false checkout 0.43.0
+git rev-parse HEAD   # must print 0f1e08eafb6b5817b7faba808362a181dbfc52a2
 # (optionally verify the upstream release signatures as in install.sh)
-git diff 0.41.0..xbt # in this repository: the complete XBT patch
-git log --oneline 0.41.0..xbt
+git diff 0.43.0..xbt-0.43 # in this repository: the complete XBT patch
+git log --oneline 0.43.0..xbt-0.43
 ```
 
-The patch only touches the files listed by `git diff --stat 0.41.0..xbt`;
+The patch only touches the files listed by `git diff --stat 0.43.0..xbt-0.43`;
 everything else is upstream byte for byte.
 
 ### How this was tested
+
+0.43.0-xbt1 (branch `xbt-0.43`, the 0.41.0 patch rebased onto upstream 0.43.0):
+
+* Unit tests, Python 3.14, upstream 0.43.0 pins:
+  `pytest jmcore directory_server jmwallet maker taker orderbook_watcher jmwalletd tumbler -m "not docker"`
+  7993 passed, 19 skipped; `pytest tests -m "not docker"` 961 passed
+  (`xbt-test-logs/0.43/`).
+* Regtest end to end against Bitcoin Knots BLAKE2b (v29.5.knots20260508,
+  BLAKE2b active from height 150): one `jm-directory-server`, four `jm-maker`
+  each with a wallet-derived fidelity bond (P2WSH, locktime 2027-01) and one
+  `jm-taker coinjoin` with `bondless_makers_allowance = 0`,
+  `minimum_makers = 4`. The 5-input CoinJoin
+  `6cd0a17f62690f0e5259244d50e1696b01219d65dec69c0eb9e0c070852f2d22` was mined
+  with every input signed 0x21 (`xbt-test-logs/0.43/coinjoin-verify.log`).
+  With one maker restarted without its bond the taker refused:
+  "Not enough makers with a fidelity bond: found 3, need 4"
+  (`bonded-only-refusal.log`). The handshake probe: the directory closes
+  `"mainnet"`, `"regtest"` and `"xbt"` and accepts only `"xbt-regtest"`
+  (`live-handshake-probe.log`).
+
+Upstream 0.42/0.43 changes checked against the patch: the new PSBT finalize
+and broadcast path (`jm-wallet sign-psbt --broadcast`) verifies with the same
+0x21-only check; the sweep fallback to expired bonds and the 2038+ locktime
+fix go through `sign_input` (the unified message already uses a 5-byte
+locktime); the bond-sibling exclusion in maker selection runs after the
+bondless filter; no new default directories, fee sources or signing paths.
+jmwalletd's backend factory, which never went through the CLI backend
+resolution, now refuses `neutrino` as well.
+
+0.41.0-xbt3:
 
 * Unit tests: `pytest jmcore directory_server maker taker jmwallet -m "not docker"`
   (Python 3.12, dependencies installed with `pip --require-hashes` from the

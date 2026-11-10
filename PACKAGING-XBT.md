@@ -8,7 +8,7 @@ documento recoge lo necesario para empaquetarlo y un borrador del tutorial.
 
 | Pieza | Origen | Versión |
 |---|---|---|
-| Backend | este repo, rama `xbt` (sobre `0.41.0` = `66d9eea`) | jmcore, jmwallet, maker, taker, tumbler, orderbook_watcher, jmwalletd |
+| Backend | este repo, rama `xbt` (sobre `0.43.0` = `0f1e08e`) | jmcore, jmwallet, maker, taker, tumbler, orderbook_watcher, jmwalletd |
 | Interfaz | [`Kilombino/jam`](https://github.com/Kilombino/jam), rama `xbt` sobre Jam `v2.0.0-beta.4` (`7dbd7010`, la que fija el Flatpak de NG 0.41.0; etiqueta firmada por theborakompanioni, `3550 2225 7551 EAB1 26D7 5616 E807 0AF0 053A AC0D`) | parche: etiqueta "Bitcoin BLAKE2b" en el pie, enlaces de txid a `https://mempool.kilombino.com/tx/…` (solo mainnet), título |
 | Node.js para compilar Jam | tarball oficial `node-v26.7.0-linux-x64` (el `.nvmrc` de Jam; SHASUMS256 firmado comprobado) | Jam exige node ≥ 26.3, npm ≥ 11.16 |
 | Nodo | Bitcoin Knots BLAKE2b (el backend lo comprueba: `difficulty_blake2b` + `header_version >= 2`) | — |
@@ -188,7 +188,7 @@ directorio real con nick-auth verificado.
    eligen. Bonos desde cartera hardware / en frío: fuera de alcance.
 3. `minimum_makers` = 4 (por defecto).
 4. Jam en español (opcional, según el navegador o el selector) y el enlace
-   de fallos a `https://github.com/Kilombino/joinmarket-ng/issues`.
+   de fallos a `https://github.com/Kilombino/joinblaket/issues`.
 5. Tests de jmwalletd adaptados; la suite pasa.
 
 ## Problemas abiertos
