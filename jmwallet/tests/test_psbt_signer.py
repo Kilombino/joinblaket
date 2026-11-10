@@ -97,6 +97,7 @@ def test_finalize_regular_preserves_reviewed_transaction(
         100_000,
         signature.value,
         signature.key[1:],
+        _psbt_spent_outputs(psbt),  # XBT build: unified sighash
     )
 
 
@@ -192,7 +193,9 @@ def test_finalize_fidelity_bond(wallet_service: WalletService, final_witness: bo
         )
     )
     assert tx.witnesses == [[signature.value, script]]
-    assert verify_p2wsh_signature(tx, 0, script, 200_000, signature.value, signature.key[1:])
+    assert verify_p2wsh_signature(
+        tx, 0, script, 200_000, signature.value, signature.key[1:], _psbt_spent_outputs(psbt)
+    )
 
 
 def _pair(key: bytes, value: bytes) -> bytes:
@@ -610,9 +613,16 @@ def test_high_locktime_psbt_signing_preserves_existing_signatures(
         100_000,
         signatures[0],
         regular_pubkey,
+        _psbt_spent_outputs(original),  # XBT build: unified sighash
     )
     assert verify_p2wsh_signature(
-        original.transaction, 1, witness_script, 200_000, signatures[1], bond_pubkey
+        original.transaction,
+        1,
+        witness_script,
+        200_000,
+        signatures[1],
+        bond_pubkey,
+        _psbt_spent_outputs(original),
     )
 
     second_plan = wallet_service.prepare_psbt_signing(first.psbt, scan_range=0)

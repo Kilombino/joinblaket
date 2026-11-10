@@ -1,3 +1,4 @@
+import hashlib
 """
 Tests for transaction signing utilities.
 """
@@ -437,15 +438,18 @@ class TestSigning:
             witnesses=[],
         )
 
+        # XBT build: unified sighash commits to every spent output.
+        spent = [(100000, b"\x00\x20" + hashlib.sha256(witness_script).digest())]
         signature = sign_p2wsh_input(
             tx=tx,
             input_index=0,
             witness_script=witness_script,
             value=100000,
             private_key=key.private_key,
+            spent_outputs=spent,
         )
 
-        assert verify_p2wsh_signature(tx, 0, witness_script, 100000, signature, pubkey)
+        assert verify_p2wsh_signature(tx, 0, witness_script, 100000, signature, pubkey, spent)
 
 
 class TestSignatureVerification:

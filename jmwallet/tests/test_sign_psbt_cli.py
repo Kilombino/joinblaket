@@ -475,8 +475,9 @@ def test_configured_chain_mismatch_prevents_backend_access(
         env={"MNEMONIC": TEST_MNEMONIC},
     )
     assert result.exit_code == 1, result.output
-    assert "Configured Bitcoin network does not match" in result.stderr
-    assert _extract_signed_psbt(result.stdout)
+    # XBT build: bitcoin_network must equal network, refused before the
+    # upstream chain comparison is reached.
+    assert "must equal network" in result.stderr
     broadcast_backend.factory.assert_not_called()
 
 

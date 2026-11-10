@@ -171,6 +171,10 @@ async def test_signed_taproot_send_pays_requested_rate(
     parsed = deserialize_transaction(raw)
     assert parsed.witnesses is not None
     signature, pubkey = parsed.witnesses[0]
+    # XBT build: the unified sighash commits to every spent output.
+    from jmcore.bitcoin import pubkey_to_p2wpkh_script
+
+    spent = [(100_000, pubkey_to_p2wpkh_script(pubkey))]
     assert verify_p2wpkh_signature(
-        parsed, 0, create_p2wpkh_script_code(pubkey), 100_000, signature, pubkey
+        parsed, 0, create_p2wpkh_script_code(pubkey), 100_000, signature, pubkey, spent
     )

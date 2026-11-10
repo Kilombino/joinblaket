@@ -981,7 +981,9 @@ class TestDeviceCompatibilityDocVector:
                 parse_psbt as parse_standalone_psbt,
             )
 
-            from jmwallet.wallet.signing import verify_p2wsh_signature
+            from jmcore.crypto import verify_strict_ecdsa
+
+            from jmwallet.wallet.signing import compute_sighash_segwit
 
             parsed = parse_standalone_psbt(generated)
             private_key, pubkey = derive_key_from_mnemonic(
@@ -995,14 +997,15 @@ class TestDeviceCompatibilityDocVector:
                     private_key,
                 )
             )
-            assert verify_p2wsh_signature(
-                signed,
-                0,
-                parsed["witness_script"],
-                parsed["witness_utxo_value"],
-                signed.witnesses[0][0],
-                pubkey,
+            # Cold-storage bond spends are the documented XBT exception: the
+            # hardware-wallet flow still signs BIP-143 SIGHASH_ALL (0x01), which
+            # verify_p2wsh_signature (unified 0x21 only) rejects by design.
+            signature = signed.witnesses[0][0]
+            assert signature[-1] == 0x01
+            sighash = compute_sighash_segwit(
+                signed, 0, parsed["witness_script"], parsed["witness_utxo_value"], 0x01
             )
+            assert verify_strict_ecdsa(sighash, signature[:-1], pubkey)
 
 
 def _extract_psbt_from_output(lines: list[str]) -> str | None:
