@@ -20,8 +20,6 @@ The code, the packages and the image still use the names `joinmarket-ng` and `ja
 
 ---
 
-<p align="center"><em>Upstream JoinMarket NG README below.</em></p>
-
 <p align="center">
   <img src="media/logo.svg" alt="JoinMarket NG Logo" width="200"/>
 </p>
