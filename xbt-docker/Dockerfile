@@ -23,8 +23,10 @@ ARG NODE_SHA256_ARM64=afc7a004018485092ac8985b817b0d5684472bd9472e0b57d2ab88737e
 # =============================================================================
 # Stage 1: Jam (static web UI)
 # =============================================================================
-FROM python:${PYTHON_VERSION}-slim@${PYTHON_SLIM_DIGEST} AS jamui
-ARG TARGETARCH
+# Built on the build machine's own arch: the output is plain JS/HTML, identical
+# for every target, and building it under QEMU is slow and hot.
+FROM --platform=$BUILDPLATFORM python:${PYTHON_VERSION}-slim@${PYTHON_SLIM_DIGEST} AS jamui
+ARG BUILDARCH
 ARG SOURCE_DATE_EPOCH
 ARG NODE_VERSION
 ARG NODE_SHA256_AMD64
@@ -35,7 +37,7 @@ RUN --mount=type=bind,source=scripts/docker-apt-install.sh,target=/tmp/docker-ap
 ADD --checksum=sha256:${NODE_SHA256_AMD64} https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz /tmp/node-amd64.tar.xz
 ADD --checksum=sha256:${NODE_SHA256_ARM64} https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-arm64.tar.xz /tmp/node-arm64.tar.xz
 RUN mkdir /opt/node && \
-    tar -xJf /tmp/node-${TARGETARCH}.tar.xz -C /opt/node --strip-components=1 && \
+    tar -xJf /tmp/node-${BUILDARCH}.tar.xz -C /opt/node --strip-components=1 && \
     rm /tmp/node-*.tar.xz
 ENV PATH="/opt/node/bin:$PATH"
 WORKDIR /src

@@ -160,16 +160,16 @@ git clone https://github.com/joinmarket-ng/joinmarket-ng.git && cd joinmarket-ng
 git -c advice.detachedHead=false checkout 0.43.0
 git rev-parse HEAD   # must print 0f1e08eafb6b5817b7faba808362a181dbfc52a2
 # (optionally verify the upstream release signatures as in install.sh)
-git diff 0.43.0..xbt-0.43 # in this repository: the complete XBT patch
-git log --oneline 0.43.0..xbt-0.43
+git diff 0.43.0..v0.43.0-xbt1 # in this repository: the complete XBT patch
+git log --oneline 0.43.0..v0.43.0-xbt1
 ```
 
-The patch only touches the files listed by `git diff --stat 0.43.0..xbt-0.43`;
+The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt1`;
 everything else is upstream byte for byte.
 
 ### How this was tested
 
-0.43.0-xbt1 (branch `xbt-0.43`, the 0.41.0 patch rebased onto upstream 0.43.0):
+0.43.0-xbt1 (tag `v0.43.0-xbt1`, the 0.41.0 patch rebased onto upstream 0.43.0):
 
 * Unit tests, Python 3.14, upstream 0.43.0 pins:
   `pytest jmcore directory_server jmwallet maker taker orderbook_watcher jmwalletd tumbler -m "not docker"`
