@@ -88,6 +88,14 @@ async def set_telegram(
         raise HTTPException(
             status_code=400, detail="The chat id is a number (negative for groups) or an @channel."
         )
+    if chat_id == token.split(":", 1)[0]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "That is the bot's own number (the start of the token). "
+                "Put your own Telegram id: @userinfobot tells you."
+            ),
+        )
     path = _env_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")

@@ -79,6 +79,14 @@ def test_rejects_malformed(authed, token: str, chat: str) -> None:
     assert not _env_file().exists()
 
 
+def test_rejects_the_bots_own_number_as_chat(authed) -> None:
+    client, h = authed
+    r = client.post(URL, headers=h, json={"bot_token": TOKEN, "chat_id": TOKEN.split(":")[0]})
+    assert r.status_code == 400
+    assert "bot's own number" in r.text
+    assert not _env_file().exists()
+
+
 def test_delete_turns_off(authed) -> None:
     client, h = authed
     client.post(URL, headers=h, json={"bot_token": TOKEN, "chat_id": "@joinblaket_test"})
