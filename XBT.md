@@ -96,6 +96,14 @@ the orderbook the CoinJoin goes on with the makers there are, as long as there a
 at least `minimum_makers` (upstream fails with "Not enough offers"). The log says
 "Asked for N makers but only M offers are available".
 
+### Funding a fidelity bond
+
+Upstream Jam funds a bond only from a CoinJoin output (`cj-out`), so the public bond
+does not point back to where the coins came from. On BLAKE2b there are no CoinJoins
+without makers and no makers without a bond, so JoinBlaket's Jam (from
+v2.0.0-beta.4-xbt5) accepts any coin that is not frozen and warns when a chosen coin is
+not a CoinJoin output. Prefer coins that do not identify you.
+
 ### Telegram notices for makers
 
 The maker tells a Telegram bot when someone takes an offer, when a CoinJoin is done
