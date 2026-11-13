@@ -81,7 +81,28 @@ Docker image (`xbt-docker/`) defaults to the BLAKE2b directory
 fidelity bond: `bondless_makers_allowance = 0`, which in this build removes
 every bondless offer before selection (no fallback; the CoinJoin fails with
 "Not enough makers with a fidelity bond"), plus
-`bondless_require_zero_fee = true` and `minimum_makers = 4`.
+`bondless_require_zero_fee = true` and `minimum_makers = 1`.
+
+`minimum_makers` defaults to 1 in this build (upstream uses 4), so CoinJoins can
+start while the BLAKE2b market has only one or two makers. The cost: with a single
+maker, that maker knows which input goes with which output, so the privacy is only
+against outside observers. Raise it (`[taker] minimum_makers`, or the taker's
+`--counterparties`) as more makers with a fidelity bond join. A maker still needs a
+fidelity bond to be chosen.
+
+### Telegram notices for makers
+
+The maker tells a Telegram bot when someone takes an offer, when a CoinJoin is done
+and when it loses the directories (the upstream Apprise notifications). Three ways to
+set it, all with a bot token from @BotFather and the chat id:
+
+* Jam (Umbrel, StartOS, Docker): Settings › Telegram notices. Save, then "Send a
+  test". The token is kept in `/data/telegram.env` (mode 600) and is never shown
+  again; "Turn off" deletes it.
+* Docker / Linux: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the environment,
+  or the same two lines in `/data/telegram.env`.
+* Any Apprise URL: `NOTIFICATIONS__URLS='["tgram://TOKEN/CHAT"]'` and
+  `NOTIFICATIONS__ENABLED=true` (this wins over the two variables above).
 
 Regtest/local testing (no Tor) uses `network = "regtest"`,
 `allow_clearnet_connections = true`, `directory_servers = ["127.0.0.1:PORT"]`
@@ -182,6 +203,10 @@ everything else is upstream byte for byte.
   `minimum_makers = 4`. The 5-input CoinJoin
   `6cd0a17f62690f0e5259244d50e1696b01219d65dec69c0eb9e0c070852f2d22` was mined
   with every input signed 0x21 (`xbt-test-logs/0.43/coinjoin-verify.log`).
+  0.43.0-xbt2, same lab: ONE bonded maker and the taker with the new default
+  `minimum_makers = 1` (`-n 1`); the CoinJoin completed and was broadcast via the
+  maker, and the maker's notices (started, fill request, signed, in mempool)
+  reached a local Apprise `json://` receiver.
   With one maker restarted without its bond the taker refused:
   "Not enough makers with a fidelity bond: found 3, need 4"
   (`bonded-only-refusal.log`). The handshake probe: the directory closes
