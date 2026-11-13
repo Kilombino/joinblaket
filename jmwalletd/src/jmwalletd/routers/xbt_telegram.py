@@ -69,6 +69,24 @@ def _apply(token: str | None, chat_id: str | None) -> None:
     reset_notifier()
 
 
+def load_saved_telegram() -> bool:
+    """At start: turn the saved bot on (native installs too, not only the Docker entrypoint).
+
+    A NOTIFICATIONS__URLS already in the environment (any Apprise URL, set by the operator or
+    the container entrypoint) wins and is left alone. Returns True when the saved bot was applied.
+    """
+    if os.environ.get("NOTIFICATIONS__URLS"):
+        return False
+    try:
+        token, chat_id = _read()
+    except OSError:
+        return False
+    if not (token and chat_id):
+        return False
+    _apply(token, chat_id)
+    return True
+
+
 @router.get("/xbt/telegram", operation_id="xbttelegramget")
 async def get_telegram(_auth: dict[str, Any] = Depends(require_auth)) -> dict[str, Any]:
     token, chat_id = _read()

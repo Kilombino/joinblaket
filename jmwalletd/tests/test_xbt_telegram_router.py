@@ -110,3 +110,22 @@ def test_test_message_reports_result(authed) -> None:
         sent.assert_awaited_once()
     with patch("jmcore.notifications.Notifier.notify", new=AsyncMock(return_value=False)):
         assert client.post(URL + "/test", headers=h).status_code == 502
+
+
+def test_saved_bot_is_loaded_at_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from jmwalletd.app import create_app
+
+    monkeypatch.delenv("NOTIFICATIONS__URLS", raising=False)
+    (tmp_path / "telegram.env").write_text(f"TELEGRAM_BOT_TOKEN={TOKEN}\nTELEGRAM_CHAT_ID=42\n")
+    create_app(data_dir=tmp_path)
+    assert os.environ["NOTIFICATIONS__URLS"] == f'["tgram://{TOKEN}/42"]'
+    assert os.environ["NOTIFICATIONS__ENABLED"] == "true"
+
+
+def test_explicit_urls_win_over_saved_bot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from jmwalletd.app import create_app
+
+    monkeypatch.setenv("NOTIFICATIONS__URLS", '["json://example/"]')
+    (tmp_path / "telegram.env").write_text(f"TELEGRAM_BOT_TOKEN={TOKEN}\nTELEGRAM_CHAT_ID=42\n")
+    create_app(data_dir=tmp_path)
+    assert os.environ["NOTIFICATIONS__URLS"] == '["json://example/"]'

@@ -109,6 +109,12 @@ def create_app(*, data_dir: Path | None = None) -> FastAPI:
     state = DaemonState(data_dir=data_dir)
     set_daemon_state(state)
 
+    # JoinBlaket: the Telegram bot saved from Jam, also when not started by the Docker entrypoint.
+    from jmwalletd.routers.xbt_telegram import load_saved_telegram
+
+    if load_saved_telegram():
+        logger.info("Telegram notices on (saved from Jam)")
+
     # Look in data_dir/jam, system path, or Flatpak prefix /app
     jam_dirs = [
         state.data_dir / "jam",
