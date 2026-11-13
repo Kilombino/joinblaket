@@ -4,7 +4,7 @@
 
 <h1 align="center">JoinBlaket</h1>
 
-<p align="center"><strong>CoinJoin on Bitcoin (BLAKE2b)</strong> · <code>0.43.0-xbt3</code> · with the <a href="https://github.com/Kilombino/jam">Jam</a> web wallet</p>
+<p align="center"><strong>CoinJoin on Bitcoin (BLAKE2b)</strong> · <code>0.43.0-xbt4</code> · with the <a href="https://github.com/Kilombino/jam">Jam</a> web wallet</p>
 
 JoinBlaket is JoinMarket-NG adapted to the Bitcoin (BLAKE2b) chain: a small, auditable patch on top of upstream (branch `xbt`). It only works on BLAKE2b and refuses to start against a node on the SHA-256 chain (Spamchain).
 
@@ -14,7 +14,7 @@ JoinBlaket is JoinMarket-NG adapted to the Bitcoin (BLAKE2b) chain: a small, aud
 - **One BLAKE2b directory**, `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`, with verified nick authentication. None built into the code.
 - **Fees** only from your node's `estimatesmartfee`. **Makers** only with a fidelity bond; a CoinJoin needs at least 1 (you can ask for more). **Backend** `descriptor_wallet` only (no Neutrino).
 
-Install: StartOS (registry `https://registry.kilombino.com`), Umbrel (store `https://github.com/Kilombino/umbrel-store`), Docker image `ghcr.io/kilombino/jam-xbt:0.43.0-xbt3`, or native. Guide (Spanish): **[kilombino.com/joinblaket](https://kilombino.com/joinblaket/)** · details in [XBT.md](XBT.md) · tutorials [Linux](TUTORIAL-LINUX-ES.md), [StartOS](TUTORIAL-STARTOS-ES.md), [Umbrel](TUTORIAL-UMBREL-ES.md).
+Install: StartOS (registry `https://registry.kilombino.com`), Umbrel (store `https://github.com/Kilombino/umbrel-store`), Docker image `ghcr.io/kilombino/jam-xbt:0.43.0-xbt4`, or native. Guide (Spanish): **[kilombino.com/joinblaket](https://kilombino.com/joinblaket/)** · details in [XBT.md](XBT.md) · tutorials [Linux](TUTORIAL-LINUX-ES.md), [StartOS](TUTORIAL-STARTOS-ES.md), [Umbrel](TUTORIAL-UMBREL-ES.md).
 
 The code, the packages and the image still use the names `joinmarket-ng` and `jam-xbt`. Use small amounts while the market is young.
 

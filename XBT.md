@@ -104,15 +104,22 @@ without makers and no makers without a bond, so JoinBlaket's Jam (from
 v2.0.0-beta.4-xbt5) accepts any coin that is not frozen and warns when a chosen coin is
 not a CoinJoin output. Prefer coins that do not identify you.
 
+### Fee settings and the bond's fee
+
+Jam's fee limits (Settings › Adjust fee limits) are kept in `<data_dir>/xbt-policy.json`
+and survive restarts and wallet locks (upstream keeps them in memory only). Creating a
+fidelity bond takes an optional mining fee in sat/vB; empty means the configured policy
+(your node's estimate).
+
 ### Telegram notices for makers
 
 The maker tells a Telegram bot when someone takes an offer, when a CoinJoin is done
 and when it loses the directories (the upstream Apprise notifications). Three ways to
 set it, all with a bot token from @BotFather and the chat id:
 
-* Jam (Umbrel, StartOS, Docker): Settings › Telegram notices. Save, then "Send a
-  test". The token is kept in `/data/telegram.env` (mode 600) and is never shown
-  again; "Turn off" deletes it.
+* Jam (Umbrel, StartOS, Docker, native): Settings › Telegram notices. Save, then "Send a
+  test". The token is kept in `<data_dir>/telegram.env` (mode 600), loaded again when
+  jmwalletd starts, and never shown again; "Turn off" deletes it.
 * Docker / Linux: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in the environment,
   or the same two lines in `/data/telegram.env`.
 * Any Apprise URL: `NOTIFICATIONS__URLS='["tgram://TOKEN/CHAT"]'` and
@@ -158,7 +165,7 @@ and `[tor] control_enabled = false`; see "How this was tested".
 
 ## Reproducible image
 
-`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt3` from
+`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt4` from
 `git archive` of this repository and of the Jam fork (committed files only),
 with every input pinned (base image digest, Debian snapshot, Node.js sha256,
 `pip --require-hashes`, `npm ci` integrity), `SOURCE_DATE_EPOCH` = the time
@@ -174,7 +181,7 @@ OCI=/tmp/b.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
 # both architectures at once (needs QEMU/binfmt for arm64), as published:
 PLATFORM=linux/amd64,linux/arm64 OCI=/tmp/multi.tar xbt-docker/build.sh ../jam-xbt
 # compare with the registry (the digest of the tag's index):
-docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt3
+docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt4
 ```
 
 Without `OCI` the image is loaded into Docker and `build.sh` prints its id
@@ -195,16 +202,16 @@ git clone https://github.com/joinmarket-ng/joinmarket-ng.git && cd joinmarket-ng
 git -c advice.detachedHead=false checkout 0.43.0
 git rev-parse HEAD   # must print 0f1e08eafb6b5817b7faba808362a181dbfc52a2
 # (optionally verify the upstream release signatures as in install.sh)
-git diff 0.43.0..v0.43.0-xbt3 # in this repository: the complete XBT patch
-git log --oneline 0.43.0..v0.43.0-xbt3
+git diff 0.43.0..v0.43.0-xbt4 # in this repository: the complete XBT patch
+git log --oneline 0.43.0..v0.43.0-xbt4
 ```
 
-The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt3`;
+The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt4`;
 everything else is upstream byte for byte.
 
 ### How this was tested
 
-0.43.0-xbt3 (tag `v0.43.0-xbt3`, the 0.41.0 patch rebased onto upstream 0.43.0):
+0.43.0-xbt4 (tag `v0.43.0-xbt4`, the 0.41.0 patch rebased onto upstream 0.43.0):
 
 * Unit tests, Python 3.14, upstream 0.43.0 pins:
   `pytest jmcore directory_server jmwallet maker taker orderbook_watcher jmwalletd tumbler -m "not docker"`
