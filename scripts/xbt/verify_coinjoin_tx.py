@@ -10,11 +10,12 @@ import base64
 import json
 import sys
 import urllib.request
+from typing import Any
 from collections import Counter
 from urllib.parse import urlsplit
 
 
-def rpc(url: str, method: str, *params: object) -> object:
+def rpc(url: str, method: str, *params: object) -> Any:
     u = urlsplit(url)
     req = urllib.request.Request(
         f"{u.scheme}://{u.hostname}:{u.port}",

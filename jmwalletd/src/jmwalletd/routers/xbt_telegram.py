@@ -81,9 +81,13 @@ async def set_telegram(
 ) -> dict[str, Any]:
     token, chat_id = body.bot_token.strip(), body.chat_id.strip()
     if not _TOKEN_RE.match(token):
-        raise HTTPException(status_code=400, detail="That does not look like a bot token from @BotFather.")
+        raise HTTPException(
+            status_code=400, detail="That does not look like a bot token from @BotFather."
+        )
     if not _CHAT_RE.match(chat_id):
-        raise HTTPException(status_code=400, detail="The chat id is a number (negative for groups) or an @channel.")
+        raise HTTPException(
+            status_code=400, detail="The chat id is a number (negative for groups) or an @channel."
+        )
     path = _env_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
@@ -113,11 +117,15 @@ async def test_telegram(_auth: dict[str, Any] = Depends(require_auth)) -> dict[s
 
     _apply(token, chat_id)
     sent = await get_notifier().notify(
-        "Test", "JoinBlaket notices reach this chat. You will hear here when someone takes your offer."
+        "Test",
+        "JoinBlaket notices reach this chat. You will hear here when someone takes your offer.",
     )
     if not sent:
         raise HTTPException(
             status_code=502,
-            detail="Telegram did not accept the message: check the token, the chat id, and that you sent /start to the bot.",
+            detail=(
+                "Telegram did not accept the message: check the token, the chat id, "
+                "and that you sent /start to the bot."
+            ),
         )
     return {"sent": True}

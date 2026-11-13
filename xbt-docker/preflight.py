@@ -17,7 +17,12 @@ import time
 from jmcore.settings import get_settings
 from jmwallet.backends.descriptor_wallet import DescriptorWalletBackend, XBTChainError
 
-EXPECTED_CHAIN = {"mainnet": "main", "testnet": "test", "signet": "signet", "regtest": "regtest"}
+EXPECTED_CHAIN = {
+    "mainnet": "main",
+    "testnet": "test",
+    "signet": "signet",
+    "regtest": "regtest",
+}
 
 
 async def check_once(backend: DescriptorWalletBackend, network: str) -> str:
@@ -37,9 +42,14 @@ async def main() -> int:
     network = settings.network_config.network.value
     btc = settings.bitcoin
     if btc.backend_type != "descriptor_wallet":
-        print("preflight: only backend_type=descriptor_wallet is supported", file=sys.stderr)
+        print(
+            "preflight: only backend_type=descriptor_wallet is supported",
+            file=sys.stderr,
+        )
         return 2
-    deadline = time.monotonic() + float(os.environ.get("JM_XBT_PREFLIGHT_TIMEOUT", "600"))
+    deadline = time.monotonic() + float(
+        os.environ.get("JM_XBT_PREFLIGHT_TIMEOUT", "600")
+    )
     while True:
         backend = DescriptorWalletBackend(
             rpc_url=btc.rpc_url,
@@ -55,7 +65,10 @@ async def main() -> int:
             return 2
         except Exception as exc:  # node down, auth error, still starting
             if time.monotonic() > deadline:
-                print(f"preflight: node not reachable at {btc.rpc_url}: {exc}", file=sys.stderr)
+                print(
+                    f"preflight: node not reachable at {btc.rpc_url}: {exc}",
+                    file=sys.stderr,
+                )
                 return 3
             print(f"preflight: waiting for node at {btc.rpc_url} ({exc!r})", flush=True)
             await asyncio.sleep(10)

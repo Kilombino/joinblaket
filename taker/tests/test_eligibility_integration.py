@@ -184,7 +184,9 @@ async def _run_with_offers(n_offers: int, *, counterparty_count: int, minimum_ma
     backend.estimate_fee = AsyncMock(return_value=2.0)
     backend.get_mempool_min_fee = AsyncMock(return_value=1.0)
     taker = Taker(_make_wallet(utxos), backend, config)
-    taker.directory_client.fetch_orderbook = AsyncMock(return_value=[Mock() for _ in range(n_offers)])
+    taker.directory_client.fetch_orderbook = AsyncMock(
+        return_value=[Mock() for _ in range(n_offers)]
+    )
     taker._update_offers_with_bond_values = AsyncMock()  # type: ignore[method-assign]
     taker.orderbook_manager.update_offers = Mock()  # type: ignore[method-assign]
     taker.orderbook_manager.select_makers = Mock(return_value=({}, 0))  # type: ignore[method-assign]

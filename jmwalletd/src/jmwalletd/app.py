@@ -203,11 +203,11 @@ def create_app(*, data_dir: Path | None = None) -> FastAPI:
     # ------------------------------------------------------------------
     from jmwalletd.routers.coinjoin import router as coinjoin_router
     from jmwalletd.routers.logs import router as logs_router
-    from jmwalletd.routers.xbt_telegram import router as xbt_telegram_router
     from jmwalletd.routers.obwatch import router as obwatch_router
     from jmwalletd.routers.tumbler import router as tumbler_router
     from jmwalletd.routers.wallet import router as wallet_router
     from jmwalletd.routers.wallet_data import router as wallet_data_router
+    from jmwalletd.routers.xbt_telegram import router as xbt_telegram_router
     from jmwalletd.websocket import router as ws_router
 
     app.include_router(wallet_router, prefix="/api/v1")

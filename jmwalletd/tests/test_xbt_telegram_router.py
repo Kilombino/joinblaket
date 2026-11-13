@@ -64,7 +64,13 @@ def test_save_then_read_never_returns_token(authed) -> None:
 
 @pytest.mark.parametrize(
     "token,chat",
-    [("not-a-token", "1"), (TOKEN, "chat"), (TOKEN + "/x", "1"), (TOKEN, "1/../x"), ("1:" + "A" * 35, "1")],
+    [
+        ("not-a-token", "1"),
+        (TOKEN, "chat"),
+        (TOKEN + "/x", "1"),
+        (TOKEN, "1/../x"),
+        ("1:" + "A" * 35, "1"),
+    ],
 )
 def test_rejects_malformed(authed, token: str, chat: str) -> None:
     client, h = authed

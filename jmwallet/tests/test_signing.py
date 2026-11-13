@@ -1,8 +1,8 @@
-import hashlib
 """
 Tests for transaction signing utilities.
 """
 
+import hashlib
 import struct
 
 import pytest

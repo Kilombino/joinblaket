@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import urllib.request
+from typing import Any
 from hashlib import sha256
 from urllib.parse import urlsplit
 
@@ -42,7 +43,7 @@ class RPC:
         self.auth = base64.b64encode(f"{u.username}:{u.password}".encode()).decode()
         self.wallet = wallet
 
-    def __call__(self, method: str, *params: object, wallet: bool = False) -> object:
+    def __call__(self, method: str, *params: object, wallet: bool = False) -> Any:
         url = self.base + (f"/wallet/{self.wallet}" if wallet and self.wallet else "")
         req = urllib.request.Request(
             url,

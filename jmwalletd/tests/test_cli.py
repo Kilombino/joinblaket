@@ -81,10 +81,12 @@ def test_data_dir_selects_its_config_file(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.delenv("JOINMARKET_CONFIG_FILE", raising=False)
     monkeypatch.setattr("jmcore.process_hardening.harden_current_process", lambda: None)
     seen: list[str] = []
-    monkeypatch.setattr(
-        "jmwalletd.app.create_app",
-        lambda data_dir: seen.append(get_settings().bitcoin.rpc_url) or object(),
-    )
+
+    def fake_create_app(data_dir: object) -> object:
+        seen.append(get_settings().bitcoin.rpc_url)
+        return object()
+
+    monkeypatch.setattr("jmwalletd.app.create_app", fake_create_app)
     monkeypatch.setattr("uvicorn.run", lambda *_args, **_kwargs: None)
     try:
         result = runner.invoke(

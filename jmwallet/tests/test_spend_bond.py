@@ -973,6 +973,7 @@ class TestDeviceCompatibilityDocVector:
             # exports without acquiring project dependencies or network access.
             monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "scripts"))
             from jmcore.bitcoin import parse_transaction
+            from jmcore.crypto import verify_strict_ecdsa
             from sign_bond_mnemonic import (
                 derive_key_from_mnemonic,
                 sign_bond_transaction,
@@ -980,8 +981,6 @@ class TestDeviceCompatibilityDocVector:
             from sign_bond_mnemonic import (
                 parse_psbt as parse_standalone_psbt,
             )
-
-            from jmcore.crypto import verify_strict_ecdsa
 
             from jmwallet.wallet.signing import compute_sighash_segwit
 
