@@ -13,6 +13,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import enum
+import json
+import os
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -163,11 +165,13 @@ class DaemonState:
         self.rescan_error: str | None = None
         self._rescan_task: asyncio.Task[None] | None = None
 
-        # In-memory config overrides (configset values, not persisted)
+        # Config overrides set by Jam (configset). JoinBlaket keeps the [POLICY]
+        # section (mining and collaborator fee limits) on disk so it survives restarts.
         self.config_overrides: dict[str, dict[str, str]] = {}
 
         # Data directory for wallet files, SSL certs, etc.
         self.data_dir = data_dir or get_default_data_dir()
+        self.load_persisted_policy()
 
         # WebSocket notification hub
         self._wallet_generation = 0
@@ -353,8 +357,47 @@ class DaemonState:
         self.tumble_task = None
         self.tumble_plan_wallet = None
         self.config_overrides.clear()
+        self.load_persisted_policy()
         get_log_buffer().clear()
         return False  # was not locked, we just locked it
+
+    # ------------------------------------------------------------------
+    # JoinBlaket: persisted [POLICY] overrides (Jam's fee limits)
+    # ------------------------------------------------------------------
+    PERSISTED_SECTIONS = ("POLICY",)
+
+    @property
+    def policy_file(self) -> Path:
+        return Path(self.data_dir) / "xbt-policy.json"
+
+    def load_persisted_policy(self) -> None:
+        """Load the saved [POLICY] overrides, if any (a bad file is ignored)."""
+        try:
+            data = json.loads(self.policy_file.read_text())
+        except (OSError, ValueError):
+            return
+        if not isinstance(data, dict):
+            return
+        for section in self.PERSISTED_SECTIONS:
+            values = data.get(section)
+            if isinstance(values, dict):
+                self.config_overrides[section] = {
+                    str(k): str(v) for k, v in values.items() if isinstance(v, (str, int, float))
+                }
+
+    def save_persisted_policy(self) -> None:
+        """Write the [POLICY] overrides atomically (mode 600)."""
+        data = {s: self.config_overrides.get(s, {}) for s in self.PERSISTED_SECTIONS}
+        path = self.policy_file
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump(data, f, indent=2, sort_keys=True)
+            os.replace(tmp, path)
+        except OSError as e:
+            logger.warning(f"Could not save the fee settings: {e}")
 
     def activate_coinjoin_state(self, state: CoinjoinState) -> None:
         """Update the coinjoin state and notify WebSocket clients."""

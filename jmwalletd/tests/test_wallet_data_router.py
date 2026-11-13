@@ -788,6 +788,9 @@ class TestConfigSet:
         assert resp.status_code == 200
         state = get_daemon_state()
         assert state.config_overrides["POLICY"]["tx_fees"] == "7000"
+        # JoinBlaket: [POLICY] is saved so it survives a restart
+        saved = (state.data_dir / "xbt-policy.json").read_text()
+        assert '"tx_fees": "7000"' in saved
 
 
 class TestTimelockAddress:

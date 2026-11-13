@@ -744,7 +744,7 @@ async def config_set(
     state: DaemonState = Depends(get_daemon_state),
     token: str | None = Depends(get_optional_token),
 ) -> dict[str, str]:
-    """Set a config variable (in-memory only, not persisted)."""
+    """Set a config variable. JoinBlaket saves the [POLICY] section to disk."""
     require_wallet_session(state, token, walletname)
     section = body.section.upper()
     field_name = body.field.lower()
@@ -753,6 +753,8 @@ async def config_set(
         state.config_overrides[section] = {}
 
     state.config_overrides[section][field_name] = body.value
+    if section in state.PERSISTED_SECTIONS:
+        state.save_persisted_policy()
     logger.info("Config override updated")
     return {}
 
