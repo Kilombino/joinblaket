@@ -65,7 +65,7 @@ def build_coinjoin_taker_config(
 
     In particular ``minimum_makers`` is capped against the requested
     ``counterparties``: a request for fewer makers than the policy
-    ``minimum_makers`` (default 4) would otherwise select a valid N-maker
+    ``minimum_makers`` would otherwise select a valid N-maker
     CoinJoin and then reject it with ``Not enough makers selected: N``.
 
     ``config_overrides`` is the daemon's in-memory ``configset`` store; the

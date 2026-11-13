@@ -402,8 +402,8 @@ class TestSettingsDefaults:
         # counterparty_count defaults to None: a random value in [8, 10] is
         # drawn per CoinJoin (matches upstream sendpayment).
         assert settings.taker.counterparty_count is None
-        # minimum_makers default 4 matches the upstream POLICY default.
-        assert settings.taker.minimum_makers == 4
+        # JoinBlaket: minimum_makers defaults to 1 while the market is young (upstream: 4).
+        assert settings.taker.minimum_makers == 1
         assert settings.taker.max_cj_fee_abs == 500
         assert settings.taker.max_cj_fee_rel == "0.001"
         assert settings.taker.max_sweep_fee_change == 0.8

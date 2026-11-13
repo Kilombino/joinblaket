@@ -15,6 +15,22 @@ log() { echo "[jm-xbt] $*"; }
 [ -n "${BITCOIN_RPC_COOKIE:-}" ] && export BITCOIN__RPC_COOKIE_FILE="$BITCOIN_RPC_COOKIE"
 unset BITCOIN_RPC_PASS BITCOIN_RPC_PASSWORD
 
+# Telegram notices for the maker (who takes an offer, CoinJoin done, directory lost...).
+# From TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID, or from /data/telegram.env with those two
+# lines (StartOS writes it from an action; on Umbrel it is edited in the app's data folder).
+# Any NOTIFICATIONS__URLS already set (any Apprise URL) wins.
+if [ -f /data/telegram.env ]; then
+    TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-$(sed -n 's/^TELEGRAM_BOT_TOKEN=//p' /data/telegram.env | tr -d '"[:space:]')}"
+    TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-$(sed -n 's/^TELEGRAM_CHAT_ID=//p' /data/telegram.env | tr -d '"[:space:]')}"
+fi
+if [ -z "${NOTIFICATIONS__URLS:-}" ] && [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+    export NOTIFICATIONS__ENABLED=true
+    export NOTIFICATIONS__URLS="[\"tgram://${TELEGRAM_BOT_TOKEN}/${TELEGRAM_CHAT_ID}\"]"
+    export NOTIFICATIONS__TITLE_PREFIX="${NOTIFICATIONS__TITLE_PREFIX:-JoinBlaket}"
+    log "Telegram notices on (chat ${TELEGRAM_CHAT_ID})"
+fi
+unset TELEGRAM_BOT_TOKEN
+
 if [ "$(id -u)" = 0 ]; then
     echo "[jm-xbt] refusing to run as root" >&2
     exit 1

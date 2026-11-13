@@ -1272,11 +1272,13 @@ class TakerSettings(BaseModel):
         description="Number of peers for multiple-peers broadcast",
     )
     minimum_makers: int = Field(
-        default=4,
+        default=1,
         ge=1,
         description=(
             "Final floor for makers after attempts to restore counterparty_count. "
-            "Default 4 matches the upstream JoinMarket reference (POLICY.n)."
+            "JoinBlaket defaults to 1 while the BLAKE2b market is young (upstream "
+            "uses 4, POLICY.n): with a single maker, that maker can link the "
+            "taker's input to its output."
         ),
     )
     max_maker_replacement_attempts: int = Field(

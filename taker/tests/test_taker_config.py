@@ -114,8 +114,8 @@ class TestTakerConfig:
         # counterparty_count defaults to None: a random value in [8, 10] is
         # drawn per CoinJoin (matches upstream JoinMarket sendpayment).
         assert config.counterparty_count is None
-        # minimum_makers default 4 matches upstream POLICY default.
-        assert config.minimum_makers == 4
+        # JoinBlaket: minimum_makers defaults to 1 while the market is young (upstream: 4).
+        assert config.minimum_makers == 1
         assert config.min_fee_rate_sat_vb == 1.0
         assert config.min_fee_block_target == 10
         assert config.round_up_cj_fees is False

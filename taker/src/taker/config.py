@@ -264,11 +264,14 @@ class TakerConfig(WalletConfig):
         default=OfferType.SW0_RELATIVE, description="Preferred offer type"
     )
     minimum_makers: int = Field(
-        default=4,
+        default=1,
         ge=1,
         description=(
             "Minimum number of makers required for the CoinJoin to proceed. "
-            "Default 4 matches the upstream JoinMarket POLICY default."
+            "JoinBlaket defaults to 1 while the BLAKE2b market is young (upstream "
+            "JoinMarket uses 4): with a single maker, that maker can link the "
+            "taker's input to its output. Raise it as more makers with a fidelity "
+            "bond join."
         ),
     )
     max_maker_replacement_attempts: int = Field(

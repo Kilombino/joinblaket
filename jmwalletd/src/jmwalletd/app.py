@@ -203,6 +203,7 @@ def create_app(*, data_dir: Path | None = None) -> FastAPI:
     # ------------------------------------------------------------------
     from jmwalletd.routers.coinjoin import router as coinjoin_router
     from jmwalletd.routers.logs import router as logs_router
+    from jmwalletd.routers.xbt_telegram import router as xbt_telegram_router
     from jmwalletd.routers.obwatch import router as obwatch_router
     from jmwalletd.routers.tumbler import router as tumbler_router
     from jmwalletd.routers.wallet import router as wallet_router
@@ -215,6 +216,7 @@ def create_app(*, data_dir: Path | None = None) -> FastAPI:
     app.include_router(tumbler_router, prefix="/api/v1")
     app.include_router(obwatch_router, prefix="/api/v1")
     app.include_router(logs_router, prefix="/api/v1")
+    app.include_router(xbt_telegram_router, prefix="/api/v1")
 
     # JAM also calls /obwatch/* without the /api/v1 prefix.
     app.include_router(obwatch_router)
