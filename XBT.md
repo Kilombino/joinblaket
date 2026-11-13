@@ -90,6 +90,12 @@ against outside observers. Raise it (`[taker] minimum_makers`, or the taker's
 `--counterparties`) as more makers with a fidelity bond join. A maker still needs a
 fidelity bond to be chosen.
 
+The number of makers a taker asks for (Jam's "collaborators", 8-10 by default; the
+taker's `--counterparties`) is now a wish, not a requirement: with fewer offers in
+the orderbook the CoinJoin goes on with the makers there are, as long as there are
+at least `minimum_makers` (upstream fails with "Not enough offers"). The log says
+"Asked for N makers but only M offers are available".
+
 ### Telegram notices for makers
 
 The maker tells a Telegram bot when someone takes an offer, when a CoinJoin is done
@@ -206,7 +212,8 @@ everything else is upstream byte for byte.
   0.43.0-xbt2, same lab: ONE bonded maker and the taker with the new default
   `minimum_makers = 1` (`-n 1`); the CoinJoin completed and was broadcast via the
   maker, and the maker's notices (started, fill request, signed, in mempool)
-  reached a local Apprise `json://` receiver.
+  reached a local Apprise `json://` receiver. Run again asking for 9 makers
+  (`-n 9`, as Jam does) with that one maker: it went on with 1 and completed.
   With one maker restarted without its bond the taker refused:
   "Not enough makers with a fidelity bond: found 3, need 4"
   (`bonded-only-refusal.log`). The handshake probe: the directory closes

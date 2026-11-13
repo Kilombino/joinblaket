@@ -1273,11 +1273,25 @@ class Taker(TakerMonitoringMixin):
             self.orderbook_manager.update_offers(offers)
 
             if len(offers) < n_makers:
-                reason = f"Not enough offers: need {n_makers}, found {len(offers)}"
-                logger.error(reason)
-                self._session.last_failure_reason = reason
-                self.state = TakerState.FAILED
-                return None
+                # JoinBlaket: ask for N, accept fewer down to minimum_makers. Jam asks for
+                # 8-10 by default and the BLAKE2b market has one or two makers, so a strict
+                # N made every Jam CoinJoin fail. Below minimum_makers it still fails.
+                floor = max(1, self.config.minimum_makers)
+                if len(offers) < floor:
+                    reason = (
+                        f"Not enough offers: need {n_makers} (at least {floor}), "
+                        f"found {len(offers)}"
+                    )
+                    logger.error(reason)
+                    self._session.last_failure_reason = reason
+                    self.state = TakerState.FAILED
+                    return None
+                logger.warning(
+                    f"Asked for {n_makers} makers but only {len(offers)} offers are "
+                    f"available; going on with {len(offers)} (minimum_makers={floor})."
+                )
+                n_makers = len(offers)
+                self._session.maker_target_count = n_makers
 
             if required_features:
                 logger.info(

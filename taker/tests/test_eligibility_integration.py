@@ -173,3 +173,38 @@ async def test_do_coinjoin_fails_before_orderbook_fetch() -> None:
     taker.directory_client.fetch_orderbook.assert_not_called()
     assert taker._session.last_failure_reason is not None
     assert "No eligible UTXOs in mixdepth 0" in taker._session.last_failure_reason
+
+
+# JoinBlaket: ask for N makers, accept fewer down to minimum_makers.
+async def _run_with_offers(n_offers: int, *, counterparty_count: int, minimum_makers: int):  # noqa: ANN202
+    utxos = [make_utxo(txid_char="a", value=25_000_000, confirmations=10)]
+    config = _make_config(counterparty_count=counterparty_count, minimum_makers=minimum_makers)
+    backend = _backend()
+    backend.can_estimate_fee = Mock(return_value=True)
+    backend.estimate_fee = AsyncMock(return_value=2.0)
+    backend.get_mempool_min_fee = AsyncMock(return_value=1.0)
+    taker = Taker(_make_wallet(utxos), backend, config)
+    taker.directory_client.fetch_orderbook = AsyncMock(return_value=[Mock() for _ in range(n_offers)])
+    taker._update_offers_with_bond_values = AsyncMock()  # type: ignore[method-assign]
+    taker.orderbook_manager.update_offers = Mock()  # type: ignore[method-assign]
+    taker.orderbook_manager.select_makers = Mock(return_value=({}, 0))  # type: ignore[method-assign]
+    result = await taker.do_coinjoin(amount=5_000_000, destination="INTERNAL", mixdepth=0)
+    return taker, result
+
+
+@pytest.mark.asyncio
+async def test_fewer_offers_than_asked_goes_on_down_to_minimum() -> None:
+    taker, result = await _run_with_offers(1, counterparty_count=9, minimum_makers=1)
+    assert result is None  # stops later: the mocked selection returns no maker
+    assert taker.orderbook_manager.select_makers.call_args.kwargs["n"] == 1
+    assert taker._session.maker_target_count == 1
+    assert "Not enough offers" not in (taker._session.last_failure_reason or "")
+
+
+@pytest.mark.asyncio
+async def test_fewer_offers_than_minimum_still_fails() -> None:
+    taker, result = await _run_with_offers(1, counterparty_count=9, minimum_makers=2)
+    assert result is None
+    assert taker.state == TakerState.FAILED
+    taker.orderbook_manager.select_makers.assert_not_called()
+    assert "Not enough offers: need 9 (at least 2), found 1" in taker._session.last_failure_reason
