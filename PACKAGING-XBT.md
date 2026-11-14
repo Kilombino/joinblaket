@@ -26,6 +26,7 @@ Salida: `dist/` (≈5 MB).
 
 | Proceso | Escucha | Notas |
 |---|---|---|
+| `rpc_filter.py` (desde xbt6) | 127.0.0.1:28187 | el único proceso con las credenciales RPC del nodo; reenvía solo los 26 métodos que usa JoinBlaket y solo sobre sus carteras `jm_<8 hex>_<red>` (ver XBT.md, "RPC filter"). En Docker corre como `jmrpc` (uid 1001) y lo demás como `jm` (1000); en StartOS y Umbrel va en su propio contenedor y Jam lleva `JM_XBT_RPC_FILTER=external` con la URL y las credenciales del filtro |
 | `tor` | 127.0.0.1:28185 (SOCKS), 127.0.0.1:28186 (control, cookie) | taker y watcher salen por SOCKS al directorio .onion; el maker crea su servicio onion efímero por el puerto de control |
 | `jm-orderbook-watcher` (o `python -m orderbook_watcher.main`) | 127.0.0.1:28184 HTTP | Jam muestra el libro de órdenes a través de jmwalletd (`/obwatch/*`); `OBWATCH_URL=http://127.0.0.1:28184` |
 | `jmwalletd` | 28183 | API `/api/v1`, websocket `/jmws`, y sirve Jam si existe `/usr/share/jmwalletd/jam/index.html`. Lanza dentro de sí el taker, el maker y el tumbler cuando Jam los pide |

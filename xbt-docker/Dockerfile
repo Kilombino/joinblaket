@@ -131,9 +131,14 @@ COPY --from=jamui /src/dist /usr/share/jmwalletd/jam
 COPY --chmod=0644 xbt-docker/torrc /etc/jm-xbt/torrc
 COPY --chmod=0755 xbt-docker/entrypoint.sh /usr/local/bin/jm-xbt-entrypoint
 COPY --chmod=0644 xbt-docker/preflight.py /usr/local/lib/jm-xbt/preflight.py
+COPY --chmod=0644 xbt-docker/rpc_filter.py /usr/local/lib/jm-xbt/rpc_filter.py
 
+# jm (1000) runs JoinBlaket; jmrpc (1001) runs only the RPC filter, the one
+# process that holds the node's RPC credentials (see entrypoint.sh).
 RUN chmod 0755 /etc/jm-xbt /usr/local/lib/jm-xbt \
     && groupadd --gid 1000 jm && useradd --uid 1000 --gid 1000 --home-dir /data --no-create-home jm \
+    && groupadd --gid 1001 jmrpc \
+    && useradd --uid 1001 --gid 1001 --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin jmrpc \
     && mkdir -p /data && chown 1000:1000 /data && chmod 700 /data
 
 # XBT defaults (override with -e; environment wins over /data/config.toml).
@@ -169,7 +174,10 @@ ENV PATH="/opt/venv/bin:$PATH" \
     TAKER__BONDLESS_REQUIRE_ZERO_FEE=true \
     TAKER__MINIMUM_MAKERS=1
 
-USER 1000:1000
+# No USER: the entrypoint starts as root only to start the RPC filter as jmrpc
+# and then runs everything else as uid 1000 (setpriv, no capabilities, no new
+# privileges). It also works started as uid 1000 (filter as the same user) or
+# with JM_XBT_RPC_FILTER=external (StartOS, Umbrel: filter in its own container).
 WORKDIR /data
 VOLUME /data
 EXPOSE 28183

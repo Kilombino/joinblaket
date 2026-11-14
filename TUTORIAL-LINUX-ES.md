@@ -16,8 +16,8 @@ Bitcoin BLAKE2b (BTC).
 **Opción A: descargarla.**
 
 ```sh
-docker pull ghcr.io/kilombino/jam-xbt:0.43.0-xbt5
-docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/kilombino/jam-xbt:0.43.0-xbt5
+docker pull ghcr.io/kilombino/jam-xbt:0.43.0-xbt6
+docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/kilombino/jam-xbt:0.43.0-xbt6
 ```
 
 La segunda línea muestra un `sha256:…`. Tiene que ser **igual** a este:
@@ -31,7 +31,7 @@ Si no coincide, no sigas.
 **Opción B: compilarla tú.** Necesitas `git`.
 
 ```sh
-git clone -b v0.43.0-xbt5 https://github.com/Kilombino/joinblaket.git
+git clone -b v0.43.0-xbt6 https://github.com/Kilombino/joinblaket.git
 git clone -b v2.0.0-beta.4-xbt6 https://github.com/Kilombino/jam.git jam-xbt
 cd joinmarket-ng
 JAM_REF=v2.0.0-beta.4-xbt6 xbt-docker/build.sh ../jam-xbt
@@ -70,7 +70,7 @@ docker run -d --name jam-xbt --restart always \
   -e BITCOIN_RPC_URL=http://host.docker.internal:8332 \
   -e BITCOIN_RPC_USER=TU_USUARIO \
   -e BITCOIN_RPC_PASS=TU_CONTRASEÑA \
-  ghcr.io/kilombino/jam-xbt:0.43.0-xbt5
+  ghcr.io/kilombino/jam-xbt:0.43.0-xbt6
 ```
 
 **No uses `--network host`**: así solo sale de la caja la página de Jam, y
@@ -82,7 +82,12 @@ Comprueba que ha arrancado:
 docker logs jam-xbt | grep preflight
 ```
 
-Debe decir `preflight: XBT node OK`. Si dice `REFUSING TO START`, tu nodo
+Debe decir `preflight: XBT node OK`. Y `docker logs jam-xbt | grep "RPC filter"` debe
+decir `RPC filter up on 127.0.0.1:28187 as user jmrpc`: desde la 0.43.0-xbt6 tu
+usuario y contraseña RPC solo los ve un filtro dentro del contenedor (usuario `jmrpc`),
+que deja pasar al nodo únicamente las llamadas que JoinBlaket usa y solo sobre sus
+propias carteras; Jam y lo que habla con la red no los pueden leer. No añadas
+`--user` al `docker run`: el filtro necesita arrancar como root para separarse. Si dice `REFUSING TO START`, tu nodo
 no es Bitcoin BLAKE2b o no es mainnet: Jam no arranca para proteger tus
 monedas. Si dice `waiting for node`, revisa el paso 2 (y que el nodo se
 haya reiniciado después de Docker: si arrancó antes, no ve `172.17.0.1`).

@@ -135,6 +135,71 @@ Regtest/local testing (no Tor) uses `network = "regtest"`,
 `allow_clearnet_connections = true`, `directory_servers = ["127.0.0.1:PORT"]`
 and `[tor] control_enabled = false`; see "How this was tested".
 
+## RPC filter (0.43.0-xbt6)
+
+JoinBlaket never holds the node's RPC credentials any more. Jam, jmwalletd, the
+maker, the taker and the orderbook watcher talk to the network (Tor, the
+directory, counterparties); if one of them were compromised, full RPC access
+would expose the whole node: every RPC and every other app's wallets. A small
+JSON-RPC proxy, `xbt-docker/rpc_filter.py` (Python standard library only),
+holds the node's credentials instead and forwards only:
+
+| Kind | Methods | Where |
+|---|---|---|
+| node | `getblockchaininfo` `getblockhash` `getblockheader` `getrawtransaction` `gettxout` `gettxspendingprevout` `getmempoolinfo` `estimatesmartfee` `testmempoolaccept` `sendrawtransaction` `getdescriptorinfo` | `/` (or a JoinBlaket wallet path) |
+| wallet | `getwalletinfo` `importdescriptors` `listdescriptors` `getaddressinfo` `listunspent` `listlockunspent` `listsinceblock` `gettransaction` `getreceivedbyaddress` `rescanblockchain` | only `/wallet/jm_<8 hex>_<network>` |
+| wallet admin | `createwallet` `loadwallet` `unloadwallet` | only with a `jm_<8 hex>_<network>` name |
+| wallet lists | `listwallets` `listwalletdir` | answered with JoinBlaket wallets only |
+
+Everything else (and any other wallet path, and wallet RPCs on `/`, where the
+node would use its default wallet) gets JSON-RPC error -32601 "method not
+allowed"; in a batch each denied call gets its own error and the allowed ones
+still run. Denied calls are logged by method name only, never with params.
+Clients authenticate with the filter's own random credentials.
+
+How the list was made: the filter has a record mode that forwards everything
+and writes each (method, scope) once. In the regtest lab every flow was driven
+through jmwalletd's API (what Jam calls), with the orderbook watcher and a
+maker started from a second jmwalletd: wallet create/lock/unlock, recover,
+rescan, receive, display/utxos/history, freeze/unfreeze (single and batch),
+config get/set, watch-export, direct send, sweep, fidelity bond address and
+funding, maker start/stop with its bond, orderbook, a CoinJoin with
+`counterparties = 1`, the tumbler (plan/start/stop) and, with the node's and
+jmwalletd's clocks moved past the locktime, the bond spend ("Unlock funds").
+That gave 21 methods. Five more are kept for code paths in the image no Jam
+flow reached: `getaddressinfo` (wallet sync beyond the descriptor range, as a
+batch), `gettxspendingprevout` (a send whose input is already spent in the
+mempool), `testmempoolaccept` (`jm-wallet send`), `unloadwallet` and
+`listwalletdir` (`jm-wallet` wallet deletion). The code also had
+`getbalances` and `getnewaddress`, which nothing calls: not allowed. The same
+flows then ran in enforce mode: all passed and nothing was denied except, on
+purpose, the orderbook watcher's first bond lookup (`listunspent` on the
+backend's default wallet name `jm_descriptor_wallet`, which JoinBlaket never
+creates; it falls back to `gettxout`). Telegram notices do not use the node.
+
+Where it runs:
+
+* **Docker (one container)**: the image starts as root only to start the
+  filter as user `jmrpc` (uid 1001), the only user that can read the node
+  credentials (`/run/jm-xbt-rpc/node.cookie`, mode 0400), then runs Tor, the
+  orderbook watcher and jmwalletd as `jm` (uid 1000) with `setpriv`, no
+  capabilities and no new privileges. `BITCOIN_RPC_*` are passed as before;
+  the entrypoint routes them through the filter. With a mounted node cookie
+  (`BITCOIN_RPC_COOKIE`) the filter's copy follows the node's new cookie after
+  a restart. Started with `--user 1000` the filter still filters, as the same
+  user (a warning says it cannot hide the credentials then). If the filter
+  stops, the container stops.
+* **StartOS**: the filter is its own daemon in its own subcontainer, the only
+  one that mounts the node's volume (for the cookie, read again when the node
+  writes a new one). Jam's subcontainer gets the filter's URL and credentials
+  only (new on every start); the copy of the node's cookie older versions kept
+  in `/data` is deleted. Health check "RPC filter": one call through it.
+* **Umbrel**: the filter is its own service (`rpcfilter`), which alone gets the
+  `APP_BITCOIN_*` credentials; Jam's service reads the filter's credentials
+  from a read-only mount. Docker health check: one call through it.
+
+Fail closed: if the filter is down, Jam shows the node as unreachable.
+
 ## Known limitations
 
 * **Interoperability**: by design this build cannot talk to upstream
@@ -171,7 +236,7 @@ and `[tor] control_enabled = false`; see "How this was tested".
 
 ## Reproducible image
 
-`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt5` from
+`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt6` from
 `git archive` of this repository and of the Jam fork (committed files only),
 with every input pinned (base image digest, Debian snapshot, Node.js sha256,
 `pip --require-hashes`, `npm ci` integrity), `SOURCE_DATE_EPOCH` = the time
@@ -187,7 +252,7 @@ OCI=/tmp/b.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
 # both architectures at once (needs QEMU/binfmt for arm64), as published:
 PLATFORM=linux/amd64,linux/arm64 OCI=/tmp/multi.tar xbt-docker/build.sh ../jam-xbt
 # compare with the registry (the digest of the tag's index):
-docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt5
+docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt6
 ```
 
 Without `OCI` the image is loaded into Docker and `build.sh` prints its id
@@ -208,16 +273,16 @@ git clone https://github.com/joinmarket-ng/joinmarket-ng.git && cd joinmarket-ng
 git -c advice.detachedHead=false checkout 0.43.0
 git rev-parse HEAD   # must print 0f1e08eafb6b5817b7faba808362a181dbfc52a2
 # (optionally verify the upstream release signatures as in install.sh)
-git diff 0.43.0..v0.43.0-xbt5 # in this repository: the complete XBT patch
-git log --oneline 0.43.0..v0.43.0-xbt5
+git diff 0.43.0..v0.43.0-xbt6 # in this repository: the complete XBT patch
+git log --oneline 0.43.0..v0.43.0-xbt6
 ```
 
-The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt5`;
+The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt6`;
 everything else is upstream byte for byte.
 
 ### How this was tested
 
-0.43.0-xbt5 (tag `v0.43.0-xbt5`, the 0.41.0 patch rebased onto upstream 0.43.0):
+0.43.0-xbt6 (tag `v0.43.0-xbt6`, the 0.41.0 patch rebased onto upstream 0.43.0):
 
 * Unit tests, Python 3.14, upstream 0.43.0 pins:
   `pytest jmcore directory_server jmwallet maker taker orderbook_watcher jmwalletd tumbler -m "not docker"`
@@ -245,6 +310,9 @@ everything else is upstream byte for byte.
   the one bonded maker: accepted (202), "Selected 1 makers from 1 offers", status
   `complete`, broadcast by the maker, a 2-input CoinJoin with both inputs signed 0x21,
   mined.
+  0.43.0-xbt6, same lab copied: every JoinBlaket component pointed at the RPC
+  filter (see "RPC filter"), first in record mode, then enforced: all flows passed,
+  including a CoinJoin with 1 maker and a bond spend after its locktime.
 
 Upstream 0.42/0.43 changes checked against the patch: the new PSBT finalize
 and broadcast path (`jm-wallet sign-psbt --broadcast`) verifies with the same
