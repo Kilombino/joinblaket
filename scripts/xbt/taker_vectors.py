@@ -564,7 +564,7 @@ def _capture_unified_preimage(
 
 def transaction_vectors() -> dict[str, Any]:
     cj_amount = 30_000_000
-    taker_utxos = [
+    taker_utxos: list[dict[str, Any]] = [
         {
             "txid": h("txid/taker-utxo")[::-1].hex(),
             "vout": 1,
@@ -573,7 +573,7 @@ def transaction_vectors() -> dict[str, Any]:
             "_key": "taker-utxo-key",
         },
     ]
-    maker1_utxos = [
+    maker1_utxos: list[dict[str, Any]] = [
         {
             "txid": h("txid/maker1-a")[::-1].hex(),
             "vout": 0,
@@ -589,7 +589,7 @@ def transaction_vectors() -> dict[str, Any]:
             "_key": "maker1-utxo-b",
         },
     ]
-    maker2_utxos = [
+    maker2_utxos: list[dict[str, Any]] = [
         {
             "txid": h("txid/maker2-a")[::-1].hex(),
             "vout": 2,
