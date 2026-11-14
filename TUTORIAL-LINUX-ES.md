@@ -23,7 +23,7 @@ docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/kilombino/jam-x
 La segunda línea muestra un `sha256:…`. Tiene que ser **igual** a este:
 
 ```
-sha256:794aae68d9245f7d486817faace10b543dd30b9152506f6f645ea73488db1d5e
+sha256:caf667e0d16da71f7342dd7dc9682fbd76a28584e7881e9131f05fb1ce093bc3
 ```
 
 Si no coincide, no sigas.
