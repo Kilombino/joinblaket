@@ -427,10 +427,12 @@ class DirectSendResponse(BaseModel):
 class DoCoinjoinRequest(BaseModel):
     """POST /api/v1/wallet/{walletname}/taker/coinjoin request.
 
-    ``counterparties`` is the number of makers requested in the coinjoin;
-    the lower bound of 2 matches the minimum the taker protocol can run with,
-    and the upper bound prevents a malformed request from triggering large
-    allocations / long-running RPC under the auth boundary.
+    ``counterparties`` is the number of makers requested in the coinjoin.
+    JoinBlaket accepts 1 (the taker's ``minimum_makers`` default is also 1
+    while the BLAKE2b market is young: Jam offers 1 when the policy allows
+    it, and above the smaller makers' limits only one maker can take an
+    amount). The upper bound prevents a malformed request from triggering
+    large allocations / long-running RPC under the auth boundary.
 
     ``input_utxos`` is an optional explicit list of ``"txid:vout"`` strings.
     When given, the CoinJoin spends exactly those UTXOs. Omit the field to
@@ -445,7 +447,7 @@ class DoCoinjoinRequest(BaseModel):
 
     mixdepth: int = Field(..., ge=0)
     amount_sats: int = Field(..., ge=0, le=MAX_MONEY_SATS)
-    counterparties: int = Field(..., ge=2, le=20)
+    counterparties: int = Field(..., ge=1, le=20)
     destination: str
     txfee: int | None = Field(default=None, ge=0, le=MAX_MONEY_SATS)
     input_utxos: list[str] | None = None

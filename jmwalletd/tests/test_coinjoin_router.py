@@ -502,6 +502,79 @@ class TestDoCoinjoin:
     @patch("taker.taker.Taker")
     @patch("taker.config.TakerConfig")
     @patch("jmwalletd.routers.coinjoin.get_settings")
+    def test_start_coinjoin_with_one_counterparty(
+        self,
+        mock_get_settings: Mock,
+        mock_config: Mock,
+        mock_taker_cls: Mock,
+        mock_backend: AsyncMock,
+        authed_client: tuple[TestClient, str],
+    ) -> None:
+        """JoinBlaket: Jam offers 1 counterparty when minimum_makers is 1; the
+        daemon used to reject it with "counterparties: Input should be greater
+        than or equal to 2". It must reach the taker as a 1-maker CoinJoin."""
+        client, token = authed_client
+        mock_taker = AsyncMock()
+        mock_taker.last_broadcast_policy = None
+        mock_taker.last_broadcast_method = None
+        mock_taker.last_broadcast_fallback_reason = None
+        mock_taker.state = TakerState.COMPLETE
+        mock_taker.txid = "e" * 64
+        mock_taker.last_failure_reason = None
+        mock_taker_cls.return_value = mock_taker
+
+        from pathlib import Path
+
+        from jmcore.models import NetworkType
+        from jmcore.settings import JoinMarketSettings
+
+        mock_settings = JoinMarketSettings()
+        mock_settings.data_dir = Path("/tmp/jm-test")
+        mock_settings.network_config.network = NetworkType.REGTEST
+        mock_settings.network_config.bitcoin_network = NetworkType.REGTEST
+        mock_settings.network_config.directory_servers = ["testdirectoryfakeaddress.onion:5222"]
+        mock_settings.bitcoin.backend_type = "descriptor_wallet"
+        # Even with a stricter policy, the request for 1 maker caps it to 1.
+        mock_settings.taker.minimum_makers = 4
+        mock_get_settings.return_value = mock_settings
+
+        resp = client.post(
+            "/api/v1/wallet/test_wallet.jmdat/taker/coinjoin",
+            json={
+                "mixdepth": 0,
+                "amount_sats": 200000,
+                "destination": "bcrt1qdest",
+                "counterparties": 1,
+            },
+            headers=_auth_headers(token),
+        )
+        assert resp.status_code == 202, resp.text
+
+        _, kwargs = mock_config.call_args
+        assert kwargs["counterparty_count"] == 1
+        assert kwargs["minimum_makers"] == 1
+        assert mock_taker.do_coinjoin.await_args.kwargs["counterparty_count"] == 1
+
+    def test_start_coinjoin_rejects_zero_counterparties(
+        self, authed_client: tuple[TestClient, str]
+    ) -> None:
+        client, token = authed_client
+        resp = client.post(
+            "/api/v1/wallet/test_wallet.jmdat/taker/coinjoin",
+            json={
+                "mixdepth": 0,
+                "amount_sats": 200000,
+                "destination": "bcrt1qdest",
+                "counterparties": 0,
+            },
+            headers=_auth_headers(token),
+        )
+        assert resp.status_code in (400, 422)
+
+    @patch("jmwalletd._backend.get_backend", new_callable=AsyncMock)
+    @patch("taker.taker.Taker")
+    @patch("taker.config.TakerConfig")
+    @patch("jmwalletd.routers.coinjoin.get_settings")
     def test_start_coinjoin_reports_failed_on_exception_before_any_phase(
         self,
         mock_get_settings: Mock,

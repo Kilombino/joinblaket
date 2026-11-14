@@ -310,14 +310,23 @@ class TestDoCoinjoinRequest:
         )
         assert req.input_utxos == input_utxos
 
+    def test_single_counterparty_accepted(self) -> None:
+        # JoinBlaket: a 1-maker CoinJoin must be accepted (Jam lets the user
+        # pick 1 when minimum_makers is 1, the xbt default).
+        req = DoCoinjoinRequest(
+            mixdepth=0,
+            amount_sats=100_000,
+            counterparties=1,
+            destination="bcrt1qtest",
+        )
+        assert req.counterparties == 1
+
     def test_counterparties_below_minimum_rejected(self) -> None:
-        # A coinjoin with only 1 counterparty defeats the purpose; the
-        # protocol's effective minimum is 2.
         with pytest.raises(ValidationError):
             DoCoinjoinRequest(
                 mixdepth=0,
                 amount_sats=100_000,
-                counterparties=1,
+                counterparties=0,
                 destination="bcrt1qtest",
             )
 
