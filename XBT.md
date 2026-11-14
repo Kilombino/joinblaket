@@ -96,6 +96,12 @@ the orderbook the CoinJoin goes on with the makers there are, as long as there a
 at least `minimum_makers` (upstream fails with "Not enough offers"). The log says
 "Asked for N makers but only M offers are available".
 
+Asking for exactly 1 maker also works through jmwalletd (Jam's Send page offers 1 when
+`minimum_makers` is 1): from 0.43.0-xbt5 `POST /taker/coinjoin` accepts
+`counterparties = 1` (upstream and earlier xbt builds required at least 2 and failed with
+"counterparties: Input should be greater than or equal to 2"). This matters when only
+one maker's limits cover the amount.
+
 ### Funding a fidelity bond
 
 Upstream Jam funds a bond only from a CoinJoin output (`cj-out`), so the public bond
@@ -165,7 +171,7 @@ and `[tor] control_enabled = false`; see "How this was tested".
 
 ## Reproducible image
 
-`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt4` from
+`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt5` from
 `git archive` of this repository and of the Jam fork (committed files only),
 with every input pinned (base image digest, Debian snapshot, Node.js sha256,
 `pip --require-hashes`, `npm ci` integrity), `SOURCE_DATE_EPOCH` = the time
@@ -181,7 +187,7 @@ OCI=/tmp/b.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
 # both architectures at once (needs QEMU/binfmt for arm64), as published:
 PLATFORM=linux/amd64,linux/arm64 OCI=/tmp/multi.tar xbt-docker/build.sh ../jam-xbt
 # compare with the registry (the digest of the tag's index):
-docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt4
+docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt5
 ```
 
 Without `OCI` the image is loaded into Docker and `build.sh` prints its id
@@ -202,20 +208,20 @@ git clone https://github.com/joinmarket-ng/joinmarket-ng.git && cd joinmarket-ng
 git -c advice.detachedHead=false checkout 0.43.0
 git rev-parse HEAD   # must print 0f1e08eafb6b5817b7faba808362a181dbfc52a2
 # (optionally verify the upstream release signatures as in install.sh)
-git diff 0.43.0..v0.43.0-xbt4 # in this repository: the complete XBT patch
-git log --oneline 0.43.0..v0.43.0-xbt4
+git diff 0.43.0..v0.43.0-xbt5 # in this repository: the complete XBT patch
+git log --oneline 0.43.0..v0.43.0-xbt5
 ```
 
-The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt4`;
+The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt5`;
 everything else is upstream byte for byte.
 
 ### How this was tested
 
-0.43.0-xbt4 (tag `v0.43.0-xbt4`, the 0.41.0 patch rebased onto upstream 0.43.0):
+0.43.0-xbt5 (tag `v0.43.0-xbt5`, the 0.41.0 patch rebased onto upstream 0.43.0):
 
 * Unit tests, Python 3.14, upstream 0.43.0 pins:
   `pytest jmcore directory_server jmwallet maker taker orderbook_watcher jmwalletd tumbler -m "not docker"`
-  7993 passed, 19 skipped; `pytest tests -m "not docker"` 961 passed
+  8014 passed, 19 skipped; `pytest tests -m "not docker"` 972 passed
   (`xbt-test-logs/0.43/`).
 * Regtest end to end against Bitcoin Knots BLAKE2b (v29.5.knots20260508,
   BLAKE2b active from height 150): one `jm-directory-server`, four `jm-maker`
@@ -234,6 +240,11 @@ everything else is upstream byte for byte.
   (`bonded-only-refusal.log`). The handshake probe: the directory closes
   `"mainnet"`, `"regtest"` and `"xbt"` and accepts only `"xbt-regtest"`
   (`live-handshake-probe.log`).
+  0.43.0-xbt5, same lab, the Jam path: jmwalletd with the taker's wallet recovered by
+  API and `POST /api/v1/wallet/{w}/taker/coinjoin` with `counterparties = 1` against
+  the one bonded maker: accepted (202), "Selected 1 makers from 1 offers", status
+  `complete`, broadcast by the maker, a 2-input CoinJoin with both inputs signed 0x21,
+  mined.
 
 Upstream 0.42/0.43 changes checked against the patch: the new PSBT finalize
 and broadcast path (`jm-wallet sign-psbt --broadcast`) verifies with the same

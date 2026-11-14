@@ -16,14 +16,14 @@ Bitcoin BLAKE2b (BTC).
 **Opción A: descargarla.**
 
 ```sh
-docker pull ghcr.io/kilombino/jam-xbt:0.43.0-xbt4
-docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/kilombino/jam-xbt:0.43.0-xbt4
+docker pull ghcr.io/kilombino/jam-xbt:0.43.0-xbt5
+docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/kilombino/jam-xbt:0.43.0-xbt5
 ```
 
 La segunda línea muestra un `sha256:…`. Tiene que ser **igual** a este:
 
 ```
-sha256:bd22015d12b7c30eaabe3b2cb49bc4643ca1346eeb126b075c2089e128f44aca
+sha256:(pendiente)
 ```
 
 Si no coincide, no sigas.
@@ -31,7 +31,7 @@ Si no coincide, no sigas.
 **Opción B: compilarla tú.** Necesitas `git`.
 
 ```sh
-git clone -b v0.43.0-xbt4 https://github.com/Kilombino/joinblaket.git
+git clone -b v0.43.0-xbt5 https://github.com/Kilombino/joinblaket.git
 git clone -b v2.0.0-beta.4-xbt6 https://github.com/Kilombino/jam.git jam-xbt
 cd joinmarket-ng
 JAM_REF=v2.0.0-beta.4-xbt6 xbt-docker/build.sh ../jam-xbt
@@ -70,7 +70,7 @@ docker run -d --name jam-xbt --restart always \
   -e BITCOIN_RPC_URL=http://host.docker.internal:8332 \
   -e BITCOIN_RPC_USER=TU_USUARIO \
   -e BITCOIN_RPC_PASS=TU_CONTRASEÑA \
-  ghcr.io/kilombino/jam-xbt:0.43.0-xbt4
+  ghcr.io/kilombino/jam-xbt:0.43.0-xbt5
 ```
 
 **No uses `--network host`**: así solo sale de la caja la página de Jam, y
