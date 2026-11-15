@@ -124,6 +124,8 @@ class DaemonState:
         self.last_taker_status: str | None = None
         self.last_taker_txid: str | None = None
         self.last_taker_error: str | None = None
+        self.last_taker_error_code: str | None = None
+        self.last_taker_error_params: dict[str, int | str | bool] | None = None
 
         # Runtime references to active taker/maker instances (for stop signals).
         self._taker_ref: Any = None
@@ -341,6 +343,8 @@ class DaemonState:
         self.last_taker_status = None
         self.last_taker_txid = None
         self.last_taker_error = None
+        self.last_taker_error_code = None
+        self.last_taker_error_params = None
         self._taker_ref = None
         self._maker_ref = None
         self._maker_task = None

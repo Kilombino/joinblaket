@@ -49,6 +49,12 @@ from loguru import logger
 from taker.coinjoin_session import CoinJoinSession
 from taker.config import Schedule, TakerConfig, resolve_counterparty_count
 from taker.eligibility import (
+    FAILURE_NO_ELIGIBLE_UTXOS,
+    FAILURE_NOT_ENOUGH_MAKERS,
+    FAILURE_NOT_ENOUGH_OFFERS,
+    FAILURE_OTHER,
+    FAILURE_PODLE_UTXO_TOO_SMALL,
+    TakerFailure,
     classify_utxos,
     fidelity_bond_inputs,
     podle_threshold_met,
@@ -88,9 +94,12 @@ def _append_confirmation_hint(message: str, taker_utxo_age: int) -> str:
 
     Used so insufficient-funds errors from coin selection consistently tell the
     user that CoinJoin inputs need confirmations and how to relax the setting.
+    Only use it when confirmations are actually the cause (see
+    ``Taker._selection_failure``): after a mixdepth-0 no-merge failure, for
+    example, it sent users waiting for blocks that would change nothing.
     """
     return (
-        f"{message}. CoinJoin requires UTXOs with at least "
+        f"{message.rstrip('.')}. CoinJoin requires UTXOs with at least "
         f"{taker_utxo_age} confirmation(s) (taker_utxo_age setting). "
         f"Wait for more confirmations or lower taker_utxo_age in your config."
     )
@@ -462,6 +471,67 @@ class Taker(TakerMonitoringMixin):
         return self._session.last_failure_reason
 
     @property
+    def last_failure_code(self) -> str | None:
+        """Stable code for ``last_failure_reason`` (``taker.eligibility.FAILURE_*``)."""
+        if self._session.last_failure_reason is None:
+            return None
+        return self._session.last_failure_code or FAILURE_OTHER
+
+    @property
+    def last_failure_params(self) -> dict[str, int | str | bool]:
+        """Parameters for ``last_failure_code`` (amounts in sats, mixdepth...)."""
+        return dict(self._session.last_failure_params)
+
+    def _record_failure(self, failure: TakerFailure) -> None:
+        """Log ``failure`` and make it this round's failure reason."""
+        logger.error(failure.message)
+        self._session.last_failure_reason = failure.message
+        self._session.last_failure_code = failure.code
+        self._session.last_failure_params = dict(failure.params)
+        self.state = TakerState.FAILED
+
+    async def _selection_failure(
+        self,
+        exc: ValueError,
+        mixdepth: int,
+        target_amount: int,
+        reserved: set[tuple[str, int]] | None,
+    ) -> TakerFailure:
+        """Turn a coin-selection error into a precise :class:`TakerFailure`.
+
+        The ``taker_utxo_age`` hint is only added when waiting for
+        confirmations would help, i.e. when the same selection succeeds once
+        unconfirmed and young UTXOs count.
+        """
+        code = getattr(exc, "code", FAILURE_OTHER)
+        params: dict[str, int | str | bool] = dict(getattr(exc, "params", {}))
+        min_conf = self.config.taker_utxo_age
+        if code == FAILURE_OTHER:
+            # Not a coin-selection verdict (e.g. no fresh PoDLE commitment):
+            # young coins are the only thing confirmations could change.
+            confirmations_help = bool(
+                classify_utxos(
+                    await self.wallet.get_utxos(mixdepth),
+                    mixdepth,
+                    min_conf,
+                    reserved_outpoints=reserved,
+                ).immature
+            )
+        else:
+            try:
+                self.wallet.select_utxos(mixdepth, target_amount, 0, exclude=reserved)
+                confirmations_help = True
+            except ValueError:
+                confirmations_help = False
+        params.setdefault("mixdepth", mixdepth)
+        params["min_confirmations"] = min_conf
+        params["confirmations_hint"] = confirmations_help
+        message = str(exc)
+        if confirmations_help:
+            message = _append_confirmation_hint(message, min_conf)
+        return TakerFailure(message=message, code=code, params=params)
+
+    @property
     def txid(self) -> str:
         """Txid of the most recently broadcast CoinJoin, or ``""`` if none.
 
@@ -587,11 +657,21 @@ class Taker(TakerMonitoringMixin):
             ``None`` when a CoinJoin can proceed, otherwise a human-readable
             reason describing why it cannot.
         """
+        failure = await self._utxo_eligibility_failure(amount, mixdepth, input_utxos)
+        return failure.message if failure is not None else None
+
+    async def _utxo_eligibility_failure(
+        self,
+        amount: int,
+        mixdepth: int | None,
+        input_utxos: list[str] | None = None,
+    ) -> TakerFailure | None:
+        """:meth:`check_utxo_eligibility` with a stable failure code."""
         min_conf = self.config.taker_utxo_age
 
         if input_utxos is not None:
             if self.config.select_utxos:
-                return "Cannot specify both --select-utxos and --input-utxo"
+                return TakerFailure("Cannot specify both --select-utxos and --input-utxo")
             resolved_mixdepth = mixdepth if mixdepth is not None else 0
             try:
                 await self._resolve_explicit_input_utxos(
@@ -600,7 +680,7 @@ class Taker(TakerMonitoringMixin):
                     amount,
                 )
             except ValueError as exc:
-                return str(exc)
+                return TakerFailure(str(exc))
             return None
 
         # Interactive selection is not bound to auto-selection (the user may
@@ -616,12 +696,18 @@ class Taker(TakerMonitoringMixin):
             reserved = self.wallet.get_locked_input_outpoints()
             if not selectable_for_interactive(utxos, min_conf, excluded_outpoints=reserved):
                 if mixdepth is not None:
-                    return classify_utxos(
-                        utxos, mixdepth, min_conf, reserved_outpoints=reserved
-                    ).no_eligible_reason()
-                return (
+                    return TakerFailure(
+                        classify_utxos(
+                            utxos, mixdepth, min_conf, reserved_outpoints=reserved
+                        ).no_eligible_reason(),
+                        FAILURE_NO_ELIGIBLE_UTXOS,
+                        {"mixdepth": mixdepth, "min_confirmations": min_conf},
+                    )
+                return TakerFailure(
                     "No selectable UTXOs in any mixdepth (all UTXOs are "
-                    "frozen, immature, fidelity bonds, or in use)"
+                    "frozen, immature, fidelity bonds, or in use)",
+                    FAILURE_NO_ELIGIBLE_UTXOS,
+                    {"min_confirmations": min_conf},
                 )
             return None
 
@@ -633,7 +719,18 @@ class Taker(TakerMonitoringMixin):
         breakdown = classify_utxos(utxos, mixdepth, min_conf, reserved_outpoints=reserved)
 
         if not breakdown.eligible:
-            return breakdown.no_eligible_reason()
+            return TakerFailure(
+                breakdown.no_eligible_reason(),
+                FAILURE_NO_ELIGIBLE_UTXOS,
+                {
+                    "mixdepth": mixdepth,
+                    "min_confirmations": min_conf,
+                    "immature": len(breakdown.immature),
+                    "frozen": len(breakdown.frozen),
+                    "bonds": len(breakdown.locked_bonds) + len(breakdown.unlocked_bonds),
+                    "reserved": len(breakdown.reserved),
+                },
+            )
 
         # Sweep spends every eligible UTXO; a non-empty pool is sufficient.
         is_sweep = amount == 0
@@ -647,11 +744,19 @@ class Taker(TakerMonitoringMixin):
             breakdown.eligible, amount, min_conf, self.config.taker_utxo_amtpercent
         ):
             min_value = int(amount * self.config.taker_utxo_amtpercent / 100)
-            return (
+            return TakerFailure(
                 f"No eligible UTXO in mixdepth {mixdepth} is large enough for the "
                 f"PoDLE commitment: need at least {min_value:,} sats "
                 f"({self.config.taker_utxo_amtpercent}% of {amount:,} sats, "
-                f"taker_utxo_amtpercent). Use a larger UTXO or lower the amount."
+                f"taker_utxo_amtpercent). Use a larger UTXO or lower the amount.",
+                FAILURE_PODLE_UTXO_TOO_SMALL,
+                {
+                    "mixdepth": mixdepth,
+                    "needed": min_value,
+                    "percent": self.config.taker_utxo_amtpercent,
+                    "amount": amount,
+                    "largest_utxo": max(u.value for u in breakdown.eligible),
+                },
             )
 
         # Amount coverage: dry-run the exact selection used later so the verdict
@@ -664,7 +769,7 @@ class Taker(TakerMonitoringMixin):
                 exclude=reserved,
             )
         except ValueError as exc:
-            return _append_confirmation_hint(str(exc), min_conf)
+            return await self._selection_failure(exc, mixdepth, amount, reserved)
 
         return None
 
@@ -717,11 +822,9 @@ class Taker(TakerMonitoringMixin):
             resolved_mixdepth = mixdepth if mixdepth is not None else 0
 
         if explicitly_selected is None:
-            eligibility_reason = await self.check_utxo_eligibility(amount, resolved_mixdepth)
-            if eligibility_reason is not None:
-                logger.error(eligibility_reason)
-                self._session.last_failure_reason = eligibility_reason
-                self.state = TakerState.FAILED
+            failure = await self._utxo_eligibility_failure(amount, resolved_mixdepth)
+            if failure is not None:
+                self._record_failure(failure)
                 return None
 
         self.last_source_mixdepth = resolved_mixdepth
@@ -1025,6 +1128,18 @@ class Taker(TakerMonitoringMixin):
         self.state = TakerState.FAILED
         return False
 
+    def _not_enough_makers_failure(self, found: int, sweep: bool) -> TakerFailure:
+        """:meth:`_not_enough_makers_reason` with its stable code."""
+        return TakerFailure(
+            self._not_enough_makers_reason(found, sweep),
+            FAILURE_NOT_ENOUGH_MAKERS,
+            {
+                "found": found,
+                "minimum": self.config.minimum_makers,
+                "bond_required": self.config.bondless_makers_allowance <= 0,
+            },
+        )
+
     def _not_enough_makers_reason(self, found: int, sweep: bool) -> str:
         """Failure reason when too few makers were selected (XBT: says when bonds are required)."""
         need = self.config.minimum_makers
@@ -1132,6 +1247,8 @@ class Taker(TakerMonitoringMixin):
             # the configured value (which may itself be ``None`` to request a
             # random draw from the upstream-aligned [8, 10] range).
             self._session.last_failure_reason = None
+            self._session.last_failure_code = None
+            self._session.last_failure_params = {}
 
             # Re-read maker nick state on every coinjoin attempt.  The maker
             # may have been started *after* this Taker was constructed (common
@@ -1282,9 +1399,13 @@ class Taker(TakerMonitoringMixin):
                         f"Not enough offers: need {n_makers} (at least {floor}), "
                         f"found {len(offers)}"
                     )
-                    logger.error(reason)
-                    self._session.last_failure_reason = reason
-                    self.state = TakerState.FAILED
+                    self._record_failure(
+                        TakerFailure(
+                            reason,
+                            FAILURE_NOT_ENOUGH_OFFERS,
+                            {"requested": n_makers, "minimum": floor, "found": len(offers)},
+                        )
+                    )
                     return None
                 logger.warning(
                     f"Asked for {n_makers} makers but only {len(offers)} offers are "
@@ -1385,10 +1506,9 @@ class Taker(TakerMonitoringMixin):
                 )
 
                 if len(selected_offers) < self.config.minimum_makers:
-                    reason = self._not_enough_makers_reason(len(selected_offers), sweep=True)
-                    logger.error(reason)
-                    self._session.last_failure_reason = reason
-                    self.state = TakerState.FAILED
+                    self._record_failure(
+                        self._not_enough_makers_failure(len(selected_offers), sweep=True)
+                    )
                     return None
 
                 logger.bind(sensitive=True).info(
@@ -1410,10 +1530,9 @@ class Taker(TakerMonitoringMixin):
                 )
 
                 if len(selected_offers) < self.config.minimum_makers:
-                    reason = self._not_enough_makers_reason(len(selected_offers), sweep=False)
-                    logger.error(reason)
-                    self._session.last_failure_reason = reason
-                    self.state = TakerState.FAILED
+                    self._record_failure(
+                        self._not_enough_makers_failure(len(selected_offers), sweep=False)
+                    )
                     return None
 
                 # Pre-select UTXOs for CoinJoin, then generate PoDLE from one of them
@@ -1460,12 +1579,20 @@ class Taker(TakerMonitoringMixin):
                             f"(total: {sum(u.value for u in preselected):,} sats)"
                         )
                     except ValueError as e:
-                        reason = _append_confirmation_hint(str(e), self.config.taker_utxo_age)
+                        failure = await self._selection_failure(
+                            e, mixdepth, estimated_required, locked_inputs
+                        )
+                        if failure.code != FAILURE_OTHER:
+                            # The amount fits the coins but not with the fees on top.
+                            failure.params["amount"] = self._session.cj_amount
+                            failure.params["fees"] = estimated_required - self._session.cj_amount
                         logger.error("Unable to pre-select CoinJoin inputs")
                         logger.bind(sensitive=True).error(
-                            "CoinJoin input selection detail: {}", reason
+                            "CoinJoin input selection detail: {}", failure.message
                         )
-                        self._session.last_failure_reason = reason
+                        self._session.last_failure_reason = failure.message
+                        self._session.last_failure_code = failure.code
+                        self._session.last_failure_params = dict(failure.params)
                         self.state = TakerState.FAILED
                         return None
 

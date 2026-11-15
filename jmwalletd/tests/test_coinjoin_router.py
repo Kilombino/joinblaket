@@ -1565,6 +1565,8 @@ class TestTakerStatus:
             "txid": None,
             "error": None,
             "broadcast_method": None,
+            "error_code": None,
+            "error_params": None,
         }
 
     def test_reads_live_off_a_running_taker(self, authed_client: tuple[TestClient, str]) -> None:
@@ -1576,6 +1578,8 @@ class TestTakerStatus:
         mock_taker.state = TakerState.BROADCASTING
         mock_taker.txid = ""
         mock_taker.last_failure_reason = None
+        mock_taker.last_failure_code = None
+        mock_taker.last_failure_params = {}
         mock_taker.last_broadcast_method = None
         state._taker_ref = mock_taker
         # A stale snapshot from a previous run must not leak through while
@@ -1595,6 +1599,8 @@ class TestTakerStatus:
             "txid": None,
             "error": None,
             "broadcast_method": None,
+            "error_code": None,
+            "error_params": None,
         }
 
     def test_running_is_false_during_a_tumble_even_though_taker_running_is_true(
@@ -1669,6 +1675,8 @@ class TestTakerStatus:
             "txid": "a" * 64,
             "error": None,
             "broadcast_method": None,
+            "error_code": None,
+            "error_params": None,
         }
 
     def test_reports_failed_snapshot_with_error_after_teardown(
@@ -1693,4 +1701,6 @@ class TestTakerStatus:
             "txid": None,
             "error": "No suitable counterparties found.",
             "broadcast_method": None,
+            "error_code": None,
+            "error_params": None,
         }

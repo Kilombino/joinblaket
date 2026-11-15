@@ -168,6 +168,10 @@ class CoinJoinSession:
 
         # Human-readable failure reason exposed for tumbler diagnostics.
         self.last_failure_reason: str | None = None
+        # JoinBlaket: stable code + parameters for the failures an API client
+        # can explain in its own words (see taker.eligibility, FAILURE_*).
+        self.last_failure_code: str | None = None
+        self.last_failure_params: dict[str, int | str | bool] = {}
         # Makers that failed to provide valid signatures after receiving !tx.
         # The owner adds these nicks to the persistent ignored-maker set after
         # the round fails; replacing them here would invalidate the transaction.
@@ -244,6 +248,8 @@ class CoinJoinSession:
         self.last_used_nicks = set()
         self.last_used_maker_keys = set()
         self.last_failure_reason = None
+        self.last_failure_code = None
+        self.last_failure_params = {}
         self.failed_signer_nicks = set()
         self.declined_signer_nicks = set()
         self.conflicting_input_nicks = set()

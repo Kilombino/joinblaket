@@ -110,7 +110,8 @@ async def test_insufficient_amount_rejected() -> None:
     reason = await taker.check_utxo_eligibility(10_000_000, 1)
     assert reason is not None
     assert "Insufficient funds" in reason
-    assert "taker_utxo_age" in reason
+    # JoinBlaket: no confirmation hint, waiting for blocks would not help.
+    assert "taker_utxo_age" not in reason
 
 
 @pytest.mark.asyncio
@@ -210,3 +211,5 @@ async def test_fewer_offers_than_minimum_still_fails() -> None:
     assert taker.state == TakerState.FAILED
     taker.orderbook_manager.select_makers.assert_not_called()
     assert "Not enough offers: need 9 (at least 2), found 1" in taker._session.last_failure_reason
+    assert taker.last_failure_code == "not_enough_offers"
+    assert taker.last_failure_params == {"requested": 9, "minimum": 2, "found": 1}

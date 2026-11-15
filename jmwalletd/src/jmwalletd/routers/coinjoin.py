@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 from typing import Any, cast
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from loguru import logger
 
@@ -34,6 +34,7 @@ from jmwalletd.models import (
     DirectSendRequest,
     DirectSendResponse,
     DoCoinjoinRequest,
+    MaxCoinjoinResponse,
     StartMakerRequest,
     TakerStatusResponse,
     TxInfo,
@@ -43,6 +44,10 @@ from jmwalletd.models import (
 from jmwalletd.state import CoinjoinState, DaemonState
 
 router = APIRouter()
+
+# Sanity bound for the mixdepth query parameter (wallets use 5; the wallet's
+# own mixdepth_count is checked in the handler).
+MAX_MIXDEPTH_QUERY = 100
 
 
 def build_coinjoin_taker_config(
@@ -209,6 +214,8 @@ async def do_coinjoin(
         state.last_taker_status = None
         state.last_taker_txid = None
         state.last_taker_error = None
+        state.last_taker_error_code = None
+        state.last_taker_error_params = None
 
         async def _run_coinjoin() -> None:
             taker: Any | None = None
@@ -299,6 +306,12 @@ async def do_coinjoin(
                         state.last_taker_error = taker.last_failure_reason or (
                             str(run_exception) if run_exception is not None else None
                         )
+                        if taker.last_failure_reason:
+                            state.last_taker_error_code = taker.last_failure_code
+                            state.last_taker_error_params = taker.last_failure_params
+                        elif run_exception is not None:
+                            state.last_taker_error_code = "other"
+                            state.last_taker_error_params = {}
                     try:
                         await taker.stop(close_wallet=False)
                     except Exception:
@@ -309,6 +322,8 @@ async def do_coinjoin(
                     # failed) -- still record something explaining why.
                     state.last_taker_status = TakerState.FAILED.value
                     state.last_taker_error = str(run_exception)
+                    state.last_taker_error_code = "other"
+                    state.last_taker_error_params = {}
                 elif cancelled and state.wallet_generation == generation:
                     state.last_taker_status = TakerState.CANCELLED.value
                 if state.wallet_generation == generation:
@@ -402,6 +417,8 @@ async def taker_status(
             txid=taker.txid or None,
             error=taker.last_failure_reason or None,
             broadcast_method=taker.last_broadcast_method or None,
+            error_code=taker.last_failure_code,
+            error_params=taker.last_failure_params if taker.last_failure_reason else None,
         )
 
     return TakerStatusResponse(
@@ -410,7 +427,95 @@ async def taker_status(
         txid=state.last_taker_txid,
         error=state.last_taker_error,
         broadcast_method=state.last_broadcast_method,
+        error_code=state.last_taker_error_code,
+        error_params=state.last_taker_error_params,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/wallet/{walletname}/taker/max-coinjoin  (JoinBlaket)
+# ---------------------------------------------------------------------------
+@router.get("/wallet/{walletname}/taker/max-coinjoin", operation_id="maxcoinjoin")
+async def max_coinjoin(
+    walletname: str,
+    mixdepth: int = Query(..., ge=0, le=MAX_MIXDEPTH_QUERY),
+    counterparties: int = Query(1, ge=1, le=20),
+    txfee: int | None = Query(None, ge=0),
+    _auth: dict[str, Any] = Depends(require_auth),
+    _wallet: None = Depends(require_wallet_match),
+    state: DaemonState = Depends(get_daemon_state),
+    token: str | None = Depends(get_optional_token),
+) -> MaxCoinjoinResponse:
+    """Largest amount one CoinJoin can send from ``mixdepth`` (no sweep).
+
+    Runs the taker's own selection rules (``WalletService.select_utxos`` via
+    ``taker.eligibility.estimate_max_coinjoin``) and its fee-rate resolution
+    with the current fee policy, so the answer matches what a
+    ``taker/coinjoin`` started now would accept. ``txfee`` has the same
+    meaning as on ``taker/coinjoin``.
+    """
+    ws, _generation = require_wallet_session(state, token, walletname)
+    if mixdepth >= ws.mixdepth_count:
+        raise InvalidRequestFormat(f"mixdepth must be below {ws.mixdepth_count}")
+    if not state.wallet_mnemonic:
+        raise NoWalletFound("Wallet mnemonic not available in daemon state.")
+    try:
+        from types import SimpleNamespace
+
+        from taker.coinjoin_session import CoinJoinSession
+        from taker.config import TakerConfig
+        from taker.eligibility import estimate_max_coinjoin
+    except ImportError:
+        raise BackendNotReady("Taker module not available.") from None
+
+    body = SimpleNamespace(
+        amount_sats=0,
+        destination="",
+        mixdepth=mixdepth,
+        counterparties=counterparties,
+        txfee=txfee or None,
+    )
+    try:
+        config = build_coinjoin_taker_config(
+            body=body,
+            mnemonic=state.wallet_mnemonic,
+            jm_settings=get_settings(),
+            taker_config_cls=TakerConfig,
+            config_overrides=state.config_overrides,
+            passphrase=state.wallet_bip39_passphrase,
+        )
+    except ValueError as exc:
+        # Same settings a CoinJoin would use; if they are unusable (e.g. no
+        # directory servers) a CoinJoin could not start either.
+        raise BackendNotReady(str(exc)) from exc
+
+    session = CoinJoinSession()
+    session.attach(
+        cast(
+            Any,
+            SimpleNamespace(wallet=ws, backend=ws.backend, config=config, directory_client=None),
+        )
+    )
+    try:
+        base_rate = await session._resolve_fee_rate()
+    except Exception as exc:
+        raise BackendNotReady(f"Cannot estimate the mining fee: {exc}") from exc
+    # Upper end of the per-round fee randomization (tx_fee_factor).
+    fee_rate = min(base_rate * (1 + config.tx_fee_factor), config.max_fee_rate_sat_vb)
+
+    await ws.get_utxos(mixdepth)
+    estimate = estimate_max_coinjoin(
+        ws,
+        mixdepth,
+        min_confirmations=config.taker_utxo_age,
+        amtpercent=config.taker_utxo_amtpercent,
+        counterparties=counterparties,
+        fee_rate_sat_vb=fee_rate,
+        max_abs_fee=int(config.max_cj_fee.abs_fee),
+        max_rel_fee=float(config.max_cj_fee.rel_fee),
+        reserved_outpoints=ws.get_locked_input_outpoints(),
+    )
+    return MaxCoinjoinResponse.model_validate(estimate.as_dict())
 
 
 # ---------------------------------------------------------------------------

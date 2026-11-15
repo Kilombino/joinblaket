@@ -481,6 +481,42 @@ class TakerStatusResponse(BaseModel):
     txid: str | None = None
     error: str | None = None
     broadcast_method: str | None = None
+    # JoinBlaket: a stable code for ``error`` (``taker.eligibility.FAILURE_*``,
+    # e.g. ``md0_no_merge``) and its parameters (amounts in sats), so a client
+    # can explain the failure in the user's language. Cleared when a new
+    # CoinJoin starts; ``None`` while nothing failed.
+    error_code: str | None = None
+    error_params: dict[str, int | str | bool] | None = None
+
+
+class MaxCoinjoinResponse(BaseModel):
+    """GET /api/v1/wallet/{walletname}/taker/max-coinjoin response (JoinBlaket).
+
+    The largest amount one CoinJoin (not a sweep) can send from ``mixdepth``
+    under the taker's own coin-selection rules: ``max_selectable`` always
+    fails when exceeded; ``max_sendable`` also leaves room for the mining fee
+    (``estimated_tx_fee``) and the makers' fees within the user's limits.
+    ``limited_by``: ``balance``, ``md0_no_merge`` (mixdepth 0 does not merge
+    coins that do not come from a CoinJoin), ``podle_utxo_too_small`` or
+    ``no_eligible_utxos``.
+    """
+
+    mixdepth: int
+    counterparties: int
+    min_confirmations: int
+    max_selectable: int
+    max_sendable: int
+    limited_by: str
+    merge_restricted: bool
+    eligible_count: int
+    eligible_value: int
+    largest_utxo: int
+    mergeable_pool: int
+    immature_value: int
+    fee_rate_sat_vb: float
+    estimated_tx_fee: int
+    max_maker_fee_abs: int
+    max_maker_fee_rel: float
 
 
 class TumblerPlanRequest(BaseModel):

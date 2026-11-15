@@ -19,6 +19,40 @@ class DirectSendSearchLimitError(ValueError):
     """Raised when bounded selection cannot prove the optimal input set."""
 
 
+class CoinSelectionError(ValueError):
+    """Insufficient-funds error from ``select_utxos`` with a stable code.
+
+    Still a ``ValueError`` (callers that only read the message keep working);
+    ``code`` and ``params`` let an API client explain the failure in its own
+    words. Codes: ``no_eligible_utxos``, ``unconfirmed_funds``,
+    ``insufficient_funds`` and ``md0_no_merge`` (mixdepth 0 refuses to merge
+    UTXOs that do not come from a CoinJoin, for privacy).
+    """
+
+    def __init__(self, message: str, code: str, **params: int | str | bool) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params: dict[str, int | str | bool] = params
+
+
+@dataclass(frozen=True)
+class SelectableSummary:
+    """The largest amount ``select_utxos`` can fund from one mixdepth.
+
+    ``max_amount`` is exact for ``select_utxos`` with the same arguments: it
+    succeeds for ``max_amount`` and raises for ``max_amount + 1``.
+    """
+
+    mixdepth: int
+    max_amount: int
+    merge_restricted: bool
+    eligible_count: int
+    eligible_value: int
+    largest_utxo: int
+    mergeable_pool: int
+    largest_non_mergeable: int
+
+
 @dataclass
 class DirectSendSelection:
     """Fee-aware result of privacy-preserving direct-send coin selection."""
@@ -362,20 +396,9 @@ class CoinSelectionMixin:
                      (this or another process) so concurrent rounds never pick the
                      same UTXO and build conflicting transactions.
         """
-        utxos = self.utxo_cache.get(mixdepth, [])
-
-        eligible = [utxo for utxo in utxos if utxo.confirmations >= min_confirmations]
-
-        # Filter out frozen UTXOs (never auto-selected)
-        eligible = [utxo for utxo in eligible if not utxo.frozen]
-
-        # Filter out UTXOs locked by another in-flight CoinJoin round.
-        if exclude:
-            eligible = [utxo for utxo in eligible if (utxo.txid, utxo.vout) not in exclude]
-
-        # Filter out fidelity bond UTXOs by default
-        if not include_fidelity_bonds:
-            eligible = [utxo for utxo in eligible if not utxo.is_fidelity_bond]
+        eligible = self._selectable_utxos(
+            mixdepth, min_confirmations, include_fidelity_bonds, exclude
+        )
 
         # Filter out included UTXOs from eligible pool to avoid duplicates
         included_txid_vout = set()
@@ -401,17 +424,7 @@ class CoinSelectionMixin:
                 return selected
 
             # Split eligible UTXOs by exact CoinJoin-output provenance.
-            mergeable = [
-                u
-                for u in eligible
-                if (
-                    u.outpoint in md0_mergeable_outpoints
-                    if md0_mergeable_outpoints is not None
-                    else u.coinjoin_output
-                )
-            ]
-            mergeable_outpoints = {u.outpoint for u in mergeable}
-            non_mergeable = [u for u in eligible if u.outpoint not in mergeable_outpoints]
+            mergeable, non_mergeable = self._split_md0_mergeable(eligible, md0_mergeable_outpoints)
 
             remaining = target_amount - total
 
@@ -440,19 +453,37 @@ class CoinSelectionMixin:
                     and u.confirmations < min_confirmations
                 )
                 if unconfirmed_total > 0:
-                    raise ValueError(
+                    raise CoinSelectionError(
                         f"Insufficient confirmed funds: no eligible UTXOs in mixdepth 0 "
                         f"({unconfirmed_total:,} sats are unconfirmed and require "
-                        f"{min_confirmations} confirmation(s) before use)"
+                        f"{min_confirmations} confirmation(s) before use)",
+                        "unconfirmed_funds",
+                        mixdepth=0,
+                        needed=target_amount,
+                        available=0,
+                        unconfirmed=unconfirmed_total,
+                        min_confirmations=min_confirmations,
                     )
-                raise ValueError("Insufficient funds: no eligible UTXOs in mixdepth 0")
+                raise CoinSelectionError(
+                    "Insufficient funds: no eligible UTXOs in mixdepth 0",
+                    "no_eligible_utxos",
+                    mixdepth=0,
+                    needed=target_amount,
+                )
 
             largest_non_mergeable = non_mergeable[0].value if non_mergeable else 0
-            raise ValueError(
+            raise CoinSelectionError(
                 f"Insufficient funds: rotation-lineage pool has {mergeable_pool_value}, "
                 f"largest non-lineage UTXO has {largest_non_mergeable}, "
                 f"need {remaining}. "
-                f"Cannot merge non-CJ md0 UTXOs for privacy reasons."
+                f"Cannot merge non-CJ md0 UTXOs for privacy reasons.",
+                "md0_no_merge",
+                mixdepth=0,
+                needed=remaining,
+                mergeable_pool=mergeable_pool_value,
+                largest_utxo=largest_non_mergeable,
+                max_amount=total + max(mergeable_pool_value, largest_non_mergeable),
+                eligible_count=len(eligible),
             )
 
         selected = []
@@ -481,17 +512,108 @@ class CoinSelectionMixin:
                 u.value for u in all_utxos if not u.frozen and u.confirmations < min_confirmations
             )
             if unconfirmed_total > 0:
-                raise ValueError(
+                raise CoinSelectionError(
                     f"Insufficient confirmed funds: need {target_amount:,} sats, "
                     f"have {total:,} confirmed sats "
                     f"({unconfirmed_total:,} sats are unconfirmed and require "
-                    f"{min_confirmations} confirmation(s) before use)"
+                    f"{min_confirmations} confirmation(s) before use)",
+                    "unconfirmed_funds",
+                    mixdepth=mixdepth,
+                    needed=target_amount,
+                    available=total,
+                    unconfirmed=unconfirmed_total,
+                    min_confirmations=min_confirmations,
                 )
-            raise ValueError(
-                f"Insufficient funds: need {target_amount:,} sats, have {total:,} sats"
+            raise CoinSelectionError(
+                f"Insufficient funds: need {target_amount:,} sats, have {total:,} sats",
+                "insufficient_funds",
+                mixdepth=mixdepth,
+                needed=target_amount,
+                available=total,
             )
 
         return selected
+
+    def _selectable_utxos(
+        self,
+        mixdepth: int,
+        min_confirmations: int,
+        include_fidelity_bonds: bool,
+        exclude: set[tuple[str, int]] | None,
+    ) -> list[UTXOInfo]:
+        """Eligible UTXOs for ``select_utxos``, largest first.
+
+        Confirmed enough, not frozen, not locked by another in-flight round,
+        and (unless asked) not a fidelity bond.
+        """
+        utxos = self.utxo_cache.get(mixdepth, [])
+        eligible = [utxo for utxo in utxos if utxo.confirmations >= min_confirmations]
+        # Frozen UTXOs are never auto-selected.
+        eligible = [utxo for utxo in eligible if not utxo.frozen]
+        if exclude:
+            eligible = [utxo for utxo in eligible if (utxo.txid, utxo.vout) not in exclude]
+        if not include_fidelity_bonds:
+            eligible = [utxo for utxo in eligible if not utxo.is_fidelity_bond]
+        eligible.sort(key=lambda u: u.value, reverse=True)
+        return eligible
+
+    @staticmethod
+    def _split_md0_mergeable(
+        eligible: list[UTXOInfo], md0_mergeable_outpoints: set[str] | None
+    ) -> tuple[list[UTXOInfo], list[UTXOInfo]]:
+        """Split md0 UTXOs into (mergeable, single-use-only), keeping order."""
+        mergeable = [
+            u
+            for u in eligible
+            if (
+                u.outpoint in md0_mergeable_outpoints
+                if md0_mergeable_outpoints is not None
+                else u.coinjoin_output
+            )
+        ]
+        mergeable_outpoints = {u.outpoint for u in mergeable}
+        non_mergeable = [u for u in eligible if u.outpoint not in mergeable_outpoints]
+        return mergeable, non_mergeable
+
+    def max_selectable_amount(
+        self,
+        mixdepth: int,
+        min_confirmations: int = 1,
+        *,
+        restrict_md0: bool = True,
+        md0_mergeable_outpoints: set[str] | None = None,
+        exclude: set[tuple[str, int]] | None = None,
+    ) -> SelectableSummary:
+        """Largest ``target_amount`` that ``select_utxos`` can fund (no fees).
+
+        Same filters and the same mixdepth-0 rule as ``select_utxos``: in
+        mixdepth 0 non-CoinJoin UTXOs are never merged, so the maximum is the
+        larger of the mergeable pool and the largest single other UTXO; in
+        other mixdepths it is the sum of the eligible UTXOs.
+        """
+        eligible = self._selectable_utxos(mixdepth, min_confirmations, False, exclude)
+        eligible_value = sum(u.value for u in eligible)
+        largest = eligible[0].value if eligible else 0
+        merge_restricted = mixdepth == 0 and restrict_md0
+        if merge_restricted:
+            mergeable, non_mergeable = self._split_md0_mergeable(eligible, md0_mergeable_outpoints)
+            pool = sum(u.value for u in mergeable)
+            largest_non_mergeable = non_mergeable[0].value if non_mergeable else 0
+            max_amount = max(pool, largest_non_mergeable)
+        else:
+            pool = 0
+            largest_non_mergeable = 0
+            max_amount = eligible_value
+        return SelectableSummary(
+            mixdepth=mixdepth,
+            max_amount=max_amount,
+            merge_restricted=merge_restricted,
+            eligible_count=len(eligible),
+            eligible_value=eligible_value,
+            largest_utxo=largest,
+            mergeable_pool=pool,
+            largest_non_mergeable=largest_non_mergeable,
+        )
 
     def get_all_utxos(
         self,

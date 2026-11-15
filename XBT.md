@@ -131,6 +131,32 @@ set it, all with a bot token from @BotFather and the chat id:
 * Any Apprise URL: `NOTIFICATIONS__URLS='["tgram://TOKEN/CHAT"]'` and
   `NOTIFICATIONS__ENABLED=true` (this wins over the two variables above).
 
+### Why a CoinJoin failed, and the most one CoinJoin can send (0.43.0-xbt7)
+
+Jar (mixdepth) 0 never combines coins that did not come from a CoinJoin in one
+CoinJoin (upstream privacy rule: it would link your deposits). One CoinJoin from jar 0
+can therefore spend at most the largest single such coin, minus fees. Upstream only
+logged the refusal, and appended "CoinJoin requires UTXOs with at least 5
+confirmation(s)" even when waiting would change nothing.
+
+* The taker adds that confirmations hint only when confirmations are the cause (the
+  same selection succeeds once young coins count).
+* `GET /api/v1/wallet/{w}/taker/status` adds `error_code` and `error_params` next to
+  `error`: `md0_no_merge`, `insufficient_funds`, `unconfirmed_funds`,
+  `no_eligible_utxos`, `podle_utxo_too_small`, `not_enough_offers`,
+  `not_enough_makers`, or `other` (amounts in sats; `confirmations_hint` says whether
+  waiting helps). Cleared when a new CoinJoin starts.
+* `GET /api/v1/wallet/{w}/taker/max-coinjoin?mixdepth=N&counterparties=K[&txfee=F]`
+  returns the largest amount one CoinJoin can send from that jar, from the taker's own
+  rules (`WalletService.max_selectable_amount`, which shares its filters with
+  `select_utxos`, plus the PoDLE size rule): `max_selectable` (above it the taker always
+  refuses) and `max_sendable` (also leaves room for the mining fee at the upper end of
+  the fee randomization, and for the makers' fees within your fee limits).
+* Jam (v2.0.0-beta.4-xbt7) shows the reason on screen, translated, when a collaborative
+  send fails, and under the amount "Max in one CoinJoin from this jar", blocking amounts
+  above `max_selectable` (send less, or consolidate first by sending the coins to
+  yourself without CoinJoin) and warning between the two values.
+
 Regtest/local testing (no Tor) uses `network = "regtest"`,
 `allow_clearnet_connections = true`, `directory_servers = ["127.0.0.1:PORT"]`
 and `[tor] control_enabled = false`; see "How this was tested".
@@ -236,7 +262,7 @@ Fail closed: if the filter is down, Jam shows the node as unreachable.
 
 ## Reproducible image
 
-`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt6` from
+`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt7` from
 `git archive` of this repository and of the Jam fork (committed files only),
 with every input pinned (base image digest, Debian snapshot, Node.js sha256,
 `pip --require-hashes`, `npm ci` integrity), `SOURCE_DATE_EPOCH` = the time
@@ -252,7 +278,7 @@ OCI=/tmp/b.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
 # both architectures at once (needs QEMU/binfmt for arm64), as published:
 PLATFORM=linux/amd64,linux/arm64 OCI=/tmp/multi.tar xbt-docker/build.sh ../jam-xbt
 # compare with the registry (the digest of the tag's index):
-docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt6
+docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt7
 ```
 
 Without `OCI` the image is loaded into Docker and `build.sh` prints its id
@@ -273,20 +299,20 @@ git clone https://github.com/joinmarket-ng/joinmarket-ng.git && cd joinmarket-ng
 git -c advice.detachedHead=false checkout 0.43.0
 git rev-parse HEAD   # must print 0f1e08eafb6b5817b7faba808362a181dbfc52a2
 # (optionally verify the upstream release signatures as in install.sh)
-git diff 0.43.0..v0.43.0-xbt6 # in this repository: the complete XBT patch
-git log --oneline 0.43.0..v0.43.0-xbt6
+git diff 0.43.0..v0.43.0-xbt7 # in this repository: the complete XBT patch
+git log --oneline 0.43.0..v0.43.0-xbt7
 ```
 
-The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt6`;
+The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt7`;
 everything else is upstream byte for byte.
 
 ### How this was tested
 
-0.43.0-xbt6 (tag `v0.43.0-xbt6`, the 0.41.0 patch rebased onto upstream 0.43.0):
+0.43.0-xbt7 (tag `v0.43.0-xbt7`, the 0.41.0 patch rebased onto upstream 0.43.0):
 
 * Unit tests, Python 3.14, upstream 0.43.0 pins:
   `pytest jmcore directory_server jmwallet maker taker orderbook_watcher jmwalletd tumbler -m "not docker"`
-  8014 passed, 19 skipped; `pytest tests -m "not docker"` 972 passed
+  8034 passed, 19 skipped; `pytest tests -m "not docker"` 1040 passed
   (`xbt-test-logs/0.43/`).
 * Regtest end to end against Bitcoin Knots BLAKE2b (v29.5.knots20260508,
   BLAKE2b active from height 150): one `jm-directory-server`, four `jm-maker`
@@ -313,6 +339,11 @@ everything else is upstream byte for byte.
   0.43.0-xbt6, same lab copied: every JoinBlaket component pointed at the RPC
   filter (see "RPC filter"), first in record mode, then enforced: all flows passed,
   including a CoinJoin with 1 maker and a bond spend after its locktime.
+  0.43.0-xbt7, same lab copied: a new wallet whose jar 0 held two deposits of
+  300,000 sats. `taker/max-coinjoin` said `max_selectable` 300,000 (`md0_no_merge`);
+  a CoinJoin of 450,000 ended `failed` with `error_code` `md0_no_merge` and no
+  confirmations hint; one of 200,000 and one of exactly `max_sendable` with 1 maker
+  completed, inputs signed 0x21.
 
 Upstream 0.42/0.43 changes checked against the patch: the new PSBT finalize
 and broadcast path (`jm-wallet sign-psbt --broadcast`) verifies with the same

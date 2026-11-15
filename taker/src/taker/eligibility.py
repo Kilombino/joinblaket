@@ -19,7 +19,9 @@ selection outcome:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
+from typing import Any
 
 from jmwallet.wallet.models import UTXOInfo
 
@@ -169,3 +171,154 @@ def podle_threshold_met(
     """
     min_value = int(cj_amount * min_percent / 100)
     return any(u.confirmations >= min_confirmations and u.value >= min_value for u in utxos)
+
+
+# ---------------------------------------------------------------------------
+# JoinBlaket: stable failure codes and the largest amount one CoinJoin can send
+# ---------------------------------------------------------------------------
+
+#: Nothing in the mixdepth can be a CoinJoin input (immature, frozen, bonds...).
+FAILURE_NO_ELIGIBLE_UTXOS = "no_eligible_utxos"
+#: Enough coins, but some are below ``taker_utxo_age`` confirmations.
+FAILURE_UNCONFIRMED_FUNDS = "unconfirmed_funds"
+#: The mixdepth does not hold enough eligible coins.
+FAILURE_INSUFFICIENT_FUNDS = "insufficient_funds"
+#: Mixdepth 0 never merges UTXOs that do not come from a CoinJoin (privacy):
+#: one CoinJoin can spend at most the largest single such UTXO.
+FAILURE_MD0_NO_MERGE = "md0_no_merge"
+#: No eligible UTXO is worth ``taker_utxo_amtpercent`` of the amount (PoDLE).
+FAILURE_PODLE_UTXO_TOO_SMALL = "podle_utxo_too_small"
+#: The orderbook has fewer offers than ``minimum_makers``.
+FAILURE_NOT_ENOUGH_OFFERS = "not_enough_offers"
+#: Fewer acceptable makers (fee limits, bonds) than ``minimum_makers``.
+FAILURE_NOT_ENOUGH_MAKERS = "not_enough_makers"
+#: Any other failure: only the message explains it.
+FAILURE_OTHER = "other"
+
+
+@dataclass
+class TakerFailure:
+    """A failure reason with a stable ``code`` and its ``params``."""
+
+    message: str
+    code: str = FAILURE_OTHER
+    params: dict[str, int | str | bool] = field(default_factory=dict)
+
+
+@dataclass
+class MaxCoinjoinEstimate:
+    """Largest amount one (non-sweep) CoinJoin can send from a mixdepth.
+
+    ``max_selectable`` is what the taker's coin selection can fund at all (the
+    same rules: unfrozen, ``taker_utxo_age`` confirmations, no fidelity bonds,
+    no inputs of another round, the mixdepth-0 no-merge rule, PoDLE size).
+    Asking for more always fails. ``max_sendable`` also leaves room for the
+    mining fee and the makers' fees (bounded by the user's fee limits), which
+    the taker adds to the amount before choosing its inputs.
+    """
+
+    mixdepth: int
+    counterparties: int
+    min_confirmations: int
+    max_selectable: int
+    max_sendable: int
+    limited_by: str
+    merge_restricted: bool
+    eligible_count: int
+    eligible_value: int
+    largest_utxo: int
+    mergeable_pool: int
+    immature_value: int
+    fee_rate_sat_vb: float
+    estimated_tx_fee: int
+    max_maker_fee_abs: int
+    max_maker_fee_rel: float
+
+    def as_dict(self) -> dict[str, int | float | str | bool]:
+        return dict(self.__dict__)
+
+
+def coinjoin_fee_margin(
+    amount_cap: int,
+    *,
+    counterparties: int,
+    tx_fee: int,
+    max_abs_fee: int,
+    max_rel_fee: float,
+) -> int:
+    """Largest amount X with X + tx_fee + n * max(abs, rel * X) <= amount_cap."""
+    room = amount_cap - tx_fee
+    if room <= 0:
+        return 0
+    n = max(1, counterparties)
+    by_abs = room - n * max(0, max_abs_fee)
+    by_rel = math.floor(room / (1 + n * max(0.0, max_rel_fee)))
+    return max(0, min(by_abs, by_rel))
+
+
+def estimate_max_coinjoin(
+    wallet: Any,
+    mixdepth: int,
+    *,
+    min_confirmations: int,
+    amtpercent: int,
+    counterparties: int,
+    fee_rate_sat_vb: float,
+    max_abs_fee: int,
+    max_rel_fee: float,
+    reserved_outpoints: set[tuple[str, int]] | None = None,
+) -> MaxCoinjoinEstimate:
+    """Estimate the largest amount one CoinJoin can send from ``mixdepth``.
+
+    Uses the wallet's own ``max_selectable_amount`` (the rules of
+    ``select_utxos``, which the taker calls) plus the PoDLE size rule. The fee
+    margin uses the transaction shape the taker budgets for when choosing its
+    inputs, with one extra input per maker as a safety margin.
+    """
+    from jmcore.fee_policy import estimate_p2wpkh_vsize
+
+    reserved = reserved_outpoints or set()
+    summary = wallet.max_selectable_amount(mixdepth, min_confirmations, exclude=reserved)
+    breakdown = classify_utxos(
+        wallet.utxo_cache.get(mixdepth, []), mixdepth, min_confirmations, reserved
+    )
+    max_selectable = summary.max_amount
+    limited_by = "balance"
+    if summary.merge_restricted and max_selectable < summary.eligible_value:
+        limited_by = FAILURE_MD0_NO_MERGE
+    if amtpercent > 0 and summary.largest_utxo > 0:
+        podle_cap = summary.largest_utxo * 100 // amtpercent
+        if podle_cap < max_selectable:
+            max_selectable = podle_cap
+            limited_by = FAILURE_PODLE_UTXO_TOO_SMALL
+    if summary.eligible_count == 0:
+        limited_by = FAILURE_NO_ELIGIBLE_UTXOS
+
+    n = max(1, counterparties)
+    vsize = estimate_p2wpkh_vsize(2 + 3 * n, 2 + 2 * n)
+    tx_fee = math.ceil(vsize * fee_rate_sat_vb)
+    max_sendable = coinjoin_fee_margin(
+        max_selectable,
+        counterparties=n,
+        tx_fee=tx_fee,
+        max_abs_fee=max_abs_fee,
+        max_rel_fee=max_rel_fee,
+    )
+    return MaxCoinjoinEstimate(
+        mixdepth=mixdepth,
+        counterparties=n,
+        min_confirmations=min_confirmations,
+        max_selectable=max_selectable,
+        max_sendable=max_sendable,
+        limited_by=limited_by,
+        merge_restricted=summary.merge_restricted,
+        eligible_count=summary.eligible_count,
+        eligible_value=summary.eligible_value,
+        largest_utxo=summary.largest_utxo,
+        mergeable_pool=summary.mergeable_pool,
+        immature_value=sum(u.value for u in breakdown.immature),
+        fee_rate_sat_vb=round(fee_rate_sat_vb, 3),
+        estimated_tx_fee=tx_fee,
+        max_maker_fee_abs=max_abs_fee,
+        max_maker_fee_rel=max_rel_fee,
+    )
