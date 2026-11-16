@@ -131,6 +131,21 @@ set it, all with a bot token from @BotFather and the chat id:
 * Any Apprise URL: `NOTIFICATIONS__URLS='["tgram://TOKEN/CHAT"]'` and
   `NOTIFICATIONS__ENABLED=true` (this wins over the two variables above).
 
+### A second fidelity bond next to the first (0.43.0-xbt8)
+
+Jam (v2.0.0-beta.4-xbt8) shows "Create Fidelity Bond" in Earn also when the wallet
+already has a bond (upstream only in developer mode), with a note: bonds do not add up,
+the maker advertises only the one with the highest value, so another bond only helps if
+it is worth more (bigger, or locked longer). Useful to lock more, or a later date,
+before the first one expires. No backend change.
+
+* Enabled only with the maker stopped and no CoinJoin running (same rule as the first
+  bond; the button follows the session poll, so it can take a few seconds to switch).
+* The date picker does not offer the month of an existing bond (one timelocked address
+  per month).
+* Existing bonds are never inputs: the coin list only offers ordinary, unfrozen coins,
+  and an expired bond is not offered either (it is spent with "Unlock funds" or "Renew").
+
 ### Why a CoinJoin failed, and the most one CoinJoin can send (0.43.0-xbt7)
 
 Jar (mixdepth) 0 never combines coins that did not come from a CoinJoin in one
@@ -262,7 +277,7 @@ Fail closed: if the filter is down, Jam shows the node as unreachable.
 
 ## Reproducible image
 
-`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt7` from
+`xbt-docker/build.sh` builds `ghcr.io/kilombino/jam-xbt:0.43.0-xbt8` from
 `git archive` of this repository and of the Jam fork (committed files only),
 with every input pinned (base image digest, Debian snapshot, Node.js sha256,
 `pip --require-hashes`, `npm ci` integrity), `SOURCE_DATE_EPOCH` = the time
@@ -278,7 +293,7 @@ OCI=/tmp/b.tar NO_CACHE=1 xbt-docker/build.sh ../jam-xbt
 # both architectures at once (needs QEMU/binfmt for arm64), as published:
 PLATFORM=linux/amd64,linux/arm64 OCI=/tmp/multi.tar xbt-docker/build.sh ../jam-xbt
 # compare with the registry (the digest of the tag's index):
-docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt7
+docker buildx imagetools inspect ghcr.io/kilombino/jam-xbt:0.43.0-xbt8
 ```
 
 Without `OCI` the image is loaded into Docker and `build.sh` prints its id
@@ -299,16 +314,16 @@ git clone https://github.com/joinmarket-ng/joinmarket-ng.git && cd joinmarket-ng
 git -c advice.detachedHead=false checkout 0.43.0
 git rev-parse HEAD   # must print 0f1e08eafb6b5817b7faba808362a181dbfc52a2
 # (optionally verify the upstream release signatures as in install.sh)
-git diff 0.43.0..v0.43.0-xbt7 # in this repository: the complete XBT patch
-git log --oneline 0.43.0..v0.43.0-xbt7
+git diff 0.43.0..v0.43.0-xbt8 # in this repository: the complete XBT patch
+git log --oneline 0.43.0..v0.43.0-xbt8
 ```
 
-The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt7`;
+The patch only touches the files listed by `git diff --stat 0.43.0..v0.43.0-xbt8`;
 everything else is upstream byte for byte.
 
 ### How this was tested
 
-0.43.0-xbt7 (tag `v0.43.0-xbt7`, the 0.41.0 patch rebased onto upstream 0.43.0):
+0.43.0-xbt8 (tag `v0.43.0-xbt8`, the 0.41.0 patch rebased onto upstream 0.43.0):
 
 * Unit tests, Python 3.14, upstream 0.43.0 pins:
   `pytest jmcore directory_server jmwallet maker taker orderbook_watcher jmwalletd tumbler -m "not docker"`
@@ -344,6 +359,13 @@ everything else is upstream byte for byte.
   a CoinJoin of 450,000 ended `failed` with `error_code` `md0_no_merge` and no
   confirmations hint; one of 200,000 and one of exactly `max_sendable` with 1 maker
   completed, inputs signed 0x21.
+  0.43.0-xbt8, same lab copied, Jam driven in a browser: a wallet with bonds for
+  December 2026 and April 2027 created a third one for June 2027 from the wizard
+  (button disabled while the maker ran and during a CoinJoin; April not offered; only
+  the plain coin as input, old bonds untouched); Earn then advertised the June bond.
+  With the node clock moved past December, a fourth bond (September 2027) was created
+  next to the expired one, which was not offered as input even unfrozen; Earn
+  advertised the September bond.
 
 Upstream 0.42/0.43 changes checked against the patch: the new PSBT finalize
 and broadcast path (`jm-wallet sign-psbt --broadcast`) verifies with the same
