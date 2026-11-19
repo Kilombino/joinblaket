@@ -1,0 +1,45 @@
+# Tor for the JoinBlaket directory node.
+# The onion's keys live in ./tor/data/hidden_service on the host.
+# THOSE KEYS ARE THE DIRECTORY'S IDENTITY: back them up (see README).
+
+DataDirectory /var/lib/tor
+Log notice stdout
+
+# SOCKS only inside the Tor container (used by ./health.sh to reach our own
+# onion through the Tor network). Not published to the host.
+SocksPort 127.0.0.1:9050
+SocksPolicy accept 127.0.0.1
+SocksPolicy reject *
+
+# Same as the production directory: avoid a corrupted circuit-build-timeout
+# state leaving the onion unreachable.
+LearnCircuitBuildTimeout 0
+CircuitBuildTimeout 60
+
+HiddenServiceDir /var/lib/tor/hidden_service
+HiddenServiceVersion 3
+# 10.52.22.10 = the directory container (fixed in docker-compose.yml).
+HiddenServicePort 5222 10.52.22.10:5222
+
+# Onion service DoS defenses (same as upstream directory_server/tor/conf/torrc).
+# These are per-service options and must stay below the HiddenServiceDir line.
+#
+# Introduction rate limiting: introduction points drop INTRODUCE2 cells above
+# this rate, so a flood is absorbed by the relays instead of this machine.
+# Normal directory traffic is far below the limit.
+HiddenServiceEnableIntroDoSDefense 1
+HiddenServiceEnableIntroDoSRatePerSec 25
+HiddenServiceEnableIntroDoSBurstPerSec 200
+# Streams per rendezvous circuit: honest peers open one connection per
+# circuit; a sybil flood multiplexing thousands of connections over a few
+# circuits gets the whole circuit closed.
+HiddenServiceMaxStreams 10
+HiddenServiceMaxStreamsCloseCircuit 1
+
+# Proof of work: clients solve a puzzle whose effort rises only under load,
+# so a flood costs the attacker CPU. Upstream leaves this commented out
+# because their Tor image lacks the module; the pinned osminogin/tor-simple
+# image has it (`tor --list-modules` shows `pow: yes`).
+HiddenServicePoWDefensesEnabled 1
+HiddenServicePoWQueueRate 25
+HiddenServicePoWQueueBurst 250

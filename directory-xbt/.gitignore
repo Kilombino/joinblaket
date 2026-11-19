@@ -1,0 +1,6 @@
+# Created by init.sh
+.env
+# The repository ignores tor/ folders; keep the config, never the keys
+!tor/
+tor/*
+!tor/torrc

@@ -16,6 +16,8 @@ JoinBlaket is JoinMarket-NG adapted to the Bitcoin (BLAKE2b) chain: a small, aud
 
 Install: StartOS (registry `https://registry.kilombino.com`), Umbrel (store `https://github.com/Kilombino/umbrel-store`), Docker image `ghcr.io/kilombino/jam-xbt:0.43.0-xbt8`, or native. Guide (Spanish): **[kilombino.com/joinblaket](https://kilombino.com/joinblaket/)** · details in [XBT.md](XBT.md) · tutorials [Linux](TUTORIAL-LINUX-ES.md), [StartOS](TUTORIAL-STARTOS-ES.md), [Umbrel](TUTORIAL-UMBREL-ES.md).
 
+Run a second directory: **[directory-xbt/](directory-xbt/README.md)** ([español](directory-xbt/README-ES.md)), Docker image `ghcr.io/kilombino/joinblaket-directory:0.43.0-xbt8` plus its own Tor onion, no ports to open.
+
 The code, the packages and the image still use the names `joinmarket-ng` and `jam-xbt`. Use small amounts while the market is young.
 
 Based on [joinmarket-ng/joinmarket-ng](https://github.com/joinmarket-ng/joinmarket-ng); its documentation is in [docs/](docs/). Licensed under MIT (see [LICENSE](LICENSE)).

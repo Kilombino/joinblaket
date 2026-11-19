@@ -1,0 +1,118 @@
+# JoinBlaket directory node (BTC, the BLAKE2b chain) behind its own Tor onion.
+#
+# First run:   ./init.sh      (creates the onion, writes .env, starts everything)
+# Health:      ./health.sh
+# See README.md / README-ES.md.
+#
+# Adapted from upstream directory_server/docker-compose.yml. Differences:
+#   - the image is built from Kilombino/joinblaket (branch xbt). The upstream
+#     ghcr.io/joinmarket-ng/... image speaks to the Spamchain market and would
+#     reject every JoinBlaket peer (handshake network "xbt").
+#   - Tor is osminogin/tor-simple pinned by digest: multi-arch (amd64, arm64,
+#     armv7), Tor 0.4.9.17 built with the PoW module, so the PoW DoS defense
+#     in tor/torrc is on.
+#   - no port is published on the host. Nothing to open on the router.
+name: joinblaket-directory
+
+services:
+  directory:
+    image: ghcr.io/kilombino/joinblaket-directory:0.43.0-xbt8
+    environment:
+      # "mainnet" here = BTC mainnet; on the wire the handshake says "xbt".
+      - NETWORK_CONFIG__NETWORK=mainnet
+      - DIRECTORY_SERVER__HOST=0.0.0.0
+      - DIRECTORY_SERVER__PORT=5222
+      - DIRECTORY_SERVER__MAX_PEERS=${MAX_PEERS:-2000}
+      - DIRECTORY_SERVER__NICK_AUTH_DIRECTORY_ID=${DIRECTORY_SERVER__NICK_AUTH_DIRECTORY_ID:-}
+      - LOGGING__LEVEL=INFO
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -z "$${DIRECTORY_SERVER__NICK_AUTH_DIRECTORY_ID:-}" ]; then
+          echo "DIRECTORY_SERVER__NICK_AUTH_DIRECTORY_ID is not set: run ./init.sh first" >&2
+          exit 1
+        fi
+        exec jm-directory-server
+    # The image's HEALTHCHECK runs `jm-directory-ctl health` (127.0.0.1:8080
+    # inside the container, not reachable from outside).
+    networks:
+      internal:
+        # Fixed address: Tor resolves its HiddenServicePort target only when
+        # it starts, so a name would break whenever the directory container
+        # is recreated with a new IP. Keep it in sync with tor/torrc.
+        ipv4_address: 10.52.22.10
+    restart: always
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/jm/.joinmarket-ng:uid=1000,gid=1000,mode=0700
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+        compress: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
+  tor:
+    image: osminogin/tor-simple:0.4.9.17@sha256:46111caf16b334e556d90d504352adecba78408b68c88c2a3045e475ce857b34
+    # Runs as the user who ran init.sh, so tor/data (the onion's keys) belongs
+    # to that user and can be backed up without sudo.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    command: ["tor", "-f", "/etc/tor/torrc"]
+    volumes:
+      - ./tor/torrc:/etc/tor/torrc:ro
+      - ./tor/data:/var/lib/tor
+    networks:
+      - internal
+      - external
+    restart: always
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      # Healthy once the onion keys exist and Tor is running.
+      test: ["CMD-SHELL", "test -s /var/lib/tor/hidden_service/hostname && pgrep -x tor >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 512M
+
+networks:
+  # The directory only sees this network: it has no Internet access at all,
+  # only Tor can reach it.
+  internal:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        # If this collides with a network you already use, change it here,
+        # the ipv4_address above and HiddenServicePort in tor/torrc.
+        - subnet: 10.52.22.0/24
+  external:
+    driver: bridge
