@@ -178,9 +178,13 @@ directorio real con nick-auth verificado.
 
 ## Decisiones tomadas
 
-1. Directorio BLAKE2b: `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
-   (el directorio BLAKE2b de Kilombino). Va por defecto en la imagen,
-   con `nick_auth_directory_ids` = el mismo `host:port`.
+1. Directorios BLAKE2b: `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
+   (el de Kilombino) y, desde 0.43.0-xbt9, dos de operadores de confianza:
+   `xgn4ctdotf6w5tnnqg6revvfyzgxkthbzy25zqxyowhv2cmtuqegwuyd.onion:5222` y
+   `ftow7ou2tnxuiowxtva4elpuebzk2vq5cbvj4gqdnbzx6wy2x7awekid.onion:5222`.
+   Van por defecto en la imagen, cada uno con `nick_auth_directory_ids` =
+   su propio `host:port`. Un maker y un taker solo se ven en un directorio
+   que compartan: los makers deben anunciarse en los tres.
 2. Solo makers **con bono de fidelidad**: `bondless_makers_allowance = 0`
    en la imagen (el código XBT descarta toda oferta sin bono y el CoinJoin
    falla con "Not enough makers with a fidelity bond" en vez de rellenar

@@ -147,7 +147,11 @@ RUN chmod 0755 /etc/jm-xbt /usr/local/lib/jm-xbt \
 # 28185, control 28186), the orderbook watcher (28184) and the maker's onion
 # listener stay on 127.0.0.1 inside the container. Run it on a normal bridge
 # network, never with --network host.
-# Nick authentication: require_verified, our directory supports JMP-0005.
+# Three JoinBlaket directories: ours (f3tfzgk5) and two run by trusted
+# operators. Makers and takers only see each other on a directory they
+# share, so every maker should announce on all three.
+# Nick authentication: require_verified, each directory supports JMP-0005
+# and signs with its own lowercase onion:5222 as its id.
 # Takers use only makers WITH a fidelity bond (allowance 0 = no bondless
 # maker is ever chosen, the CoinJoin fails with "Not enough makers with a
 # fidelity bond" instead); zero-fee rule kept as a second guard.
@@ -158,9 +162,9 @@ ENV PATH="/opt/venv/bin:$PATH" \
     JMWALLETD_HOST=0.0.0.0 \
     BITCOIN__BACKEND_TYPE=descriptor_wallet \
     NETWORK_CONFIG__NETWORK=mainnet \
-    NETWORK_CONFIG__DIRECTORY_SERVERS=f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222 \
+    NETWORK_CONFIG__DIRECTORY_SERVERS=f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222,xgn4ctdotf6w5tnnqg6revvfyzgxkthbzy25zqxyowhv2cmtuqegwuyd.onion:5222,ftow7ou2tnxuiowxtva4elpuebzk2vq5cbvj4gqdnbzx6wy2x7awekid.onion:5222 \
     NETWORK_CONFIG__NICK_AUTH_MODE=require_verified \
-    NETWORK_CONFIG__NICK_AUTH_DIRECTORY_IDS='{"f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222":"f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222"}' \
+    NETWORK_CONFIG__NICK_AUTH_DIRECTORY_IDS='{"f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222":"f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222","xgn4ctdotf6w5tnnqg6revvfyzgxkthbzy25zqxyowhv2cmtuqegwuyd.onion:5222":"xgn4ctdotf6w5tnnqg6revvfyzgxkthbzy25zqxyowhv2cmtuqegwuyd.onion:5222","ftow7ou2tnxuiowxtva4elpuebzk2vq5cbvj4gqdnbzx6wy2x7awekid.onion:5222":"ftow7ou2tnxuiowxtva4elpuebzk2vq5cbvj4gqdnbzx6wy2x7awekid.onion:5222"}' \
     TOR__SOCKS_HOST=127.0.0.1 \
     TOR__SOCKS_PORT=28185 \
     TOR__CONTROL_HOST=127.0.0.1 \

@@ -60,7 +60,9 @@ rpc_password = "yourpassword"
 network = "mainnet"                         # = BTC on BLAKE2b; announces "xbt" on the wire
 # bitcoin_network, if set, must also be "mainnet"
 directory_servers = [                       # REQUIRED: BLAKE2b directories only
-  "yourxbtdirectory56charsonionaddressxxxxxxxxxxxxxxxxxxxxx.onion:5222",
+  "f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222",
+  "xgn4ctdotf6w5tnnqg6revvfyzgxkthbzy25zqxyowhv2cmtuqegwuyd.onion:5222",
+  "ftow7ou2tnxuiowxtva4elpuebzk2vq5cbvj4gqdnbzx6wy2x7awekid.onion:5222",
 ]
 
 [tor]
@@ -75,9 +77,13 @@ socks_port = 9050
 
 Running a BLAKE2b directory: `jm-directory-server` with `network = "mainnet"`
 answers only `"xbt"` handshakes. There is no built-in list in the code; the
-Docker image (`xbt-docker/`) defaults to the BLAKE2b directory
-`f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
-(nick-auth directory id: the same `host:port`). The image also makes takers use only makers with a
+Docker image (`xbt-docker/`) defaults to three BLAKE2b directories:
+ours, `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`, and two run by trusted operators,
+`xgn4ctdotf6w5tnnqg6revvfyzgxkthbzy25zqxyowhv2cmtuqegwuyd.onion:5222` and
+`ftow7ou2tnxuiowxtva4elpuebzk2vq5cbvj4gqdnbzx6wy2x7awekid.onion:5222`
+(each one's nick-auth directory id: its own `host:port`). A maker and a taker
+only see each other on a directory they both use, so a maker should announce
+on all three; a taker that lists all three still works if one is down. The image also makes takers use only makers with a
 fidelity bond: `bondless_makers_allowance = 0`, which in this build removes
 every bondless offer before selection (no fallback; the CoinJoin fails with
 "Not enough makers with a fidelity bond"), plus

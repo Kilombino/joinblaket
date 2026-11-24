@@ -23,3 +23,26 @@ def test_image_minimum_makers_matches_code_default() -> None:
 
 def test_image_keeps_bonded_only_makers() -> None:
     assert _env("TAKER__BONDLESS_MAKERS_ALLOWANCE") == "0"
+
+
+def test_image_directories_all_nick_verified() -> None:
+    # 0.43.0-xbt9: three JoinBlaket directories. Each one must have its
+    # nick-auth id (its own lowercase onion:5222), or require_verified
+    # would refuse it.
+    import json
+
+    from jmcore.settings import NetworkSettings
+
+    ids = json.loads(_env("NETWORK_CONFIG__NICK_AUTH_DIRECTORY_IDS").strip("'"))
+    config = NetworkSettings(
+        directory_servers=_env("NETWORK_CONFIG__DIRECTORY_SERVERS"),
+        nick_auth_mode=_env("NETWORK_CONFIG__NICK_AUTH_MODE"),
+        nick_auth_directory_ids=ids,
+    )
+    servers = config.directory_servers
+    assert len(servers) == len(set(servers)) == 3
+    assert servers[0].startswith("f3tfzgk5")
+    assert set(servers) == set(config.nick_auth_directory_ids)
+    for server in servers:
+        assert server == server.lower() and server.endswith(".onion:5222")
+        assert config.nick_auth_directory_ids[server] == server

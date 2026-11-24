@@ -10,7 +10,7 @@ Esta carpeta sirve para que **cualquier voluntario monte un segundo directorio d
 
 JoinBlaket es la versión de JoinMarket para BTC (la cadena BLAKE2b). Para hacer un CoinJoin, quienes ofrecen liquidez (*makers*) y quienes la usan (*takers*) tienen que encontrarse. El **directorio** es el punto de encuentro: un tablón de anuncios en una dirección `.onion` de Tor donde los makers publican sus ofertas y los takers las leen y les escriben.
 
-Hoy solo hay **un** directorio, el de Kilombino. Si se cae, nadie encuentra a nadie y no hay CoinJoins. Con un segundo directorio, llevado por otra persona en otra casa, el mercado sigue funcionando aunque uno de los dos falle, y nadie es imprescindible.
+Al principio solo había **un** directorio, el de Kilombino: si se caía, nadie encontraba a nadie y no había CoinJoins. Desde la 0.43.0-xbt9 hay **tres** (el de Kilombino y dos de operadores de confianza), y el mercado sigue funcionando aunque uno falle. Cuantos más, mejor: nadie es imprescindible.
 
 ## Qué puede y qué NO puede hacer un directorio
 

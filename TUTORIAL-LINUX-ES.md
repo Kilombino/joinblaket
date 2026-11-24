@@ -197,9 +197,14 @@ Los bonos se crean con la cartera de Jam (firma 0x21, como todo).
   con cualquier otro.
 - Todas las firmas usan **0x21**: así tus transacciones no se pueden
   repetir en la cadena SHA-256.
-- El directorio BLAKE2b es
-  `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`
-  (por Tor, dentro del contenedor).
+- Hay tres directorios BLAKE2b (por Tor, dentro del contenedor): el
+  nuestro, `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`,
+  y dos de operadores de confianza,
+  `xgn4ctdotf6w5tnnqg6revvfyzgxkthbzy25zqxyowhv2cmtuqegwuyd.onion:5222` y
+  `ftow7ou2tnxuiowxtva4elpuebzk2vq5cbvj4gqdnbzx6wy2x7awekid.onion:5222`.
+  Jam usa los tres: si uno se cae, el mercado sigue en los otros. Un maker
+  y un taker solo se ven en un directorio que compartan, así que si tienes
+  un maker configurado a mano, anúncialo en los tres.
 - Jam solo escucha en este ordenador (`127.0.0.1`). No abras el puerto 28183
   a Internet ni arranques el contenedor con `--network host`.
 - Jam solo habla con directorios que demuestran quiénes son (autenticación

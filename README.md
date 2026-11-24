@@ -11,7 +11,7 @@ JoinBlaket is JoinMarket-NG adapted to the Bitcoin (BLAKE2b) chain: a small, aud
 - **Network `"xbt"`** on the wire: SHA-256 (`"mainnet"`) directories and peers are rejected.
 - **Unified sighash `0x21`** on every signature, and only `0x21` accepted from others: nothing you sign can be replayed on the SHA-256 chain.
 - **Node check:** requires `difficulty_blake2b` and v2 headers before the first call (fails closed).
-- **One BLAKE2b directory**, `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`, with verified nick authentication. None built into the code.
+- **Three BLAKE2b directories**: ours, `f3tfzgk5ilwfapx427yx5ckeh7ptuvskfxnfnicfo747jyq5mgzdtvad.onion:5222`, and two run by trusted operators, `xgn4ctdotf6w5tnnqg6revvfyzgxkthbzy25zqxyowhv2cmtuqegwuyd.onion:5222` and `ftow7ou2tnxuiowxtva4elpuebzk2vq5cbvj4gqdnbzx6wy2x7awekid.onion:5222`, all with verified nick authentication. None built into the code. Makers and takers only see each other on a directory they share, so makers should announce on all three.
 - **Fees** only from your node's `estimatesmartfee`. **Makers** only with a fidelity bond; a CoinJoin needs at least 1 (you can ask for more). **Backend** `descriptor_wallet` only (no Neutrino).
 
 Install: StartOS (registry `https://registry.kilombino.com`), Umbrel (store `https://github.com/Kilombino/umbrel-store`), Docker image `ghcr.io/kilombino/jam-xbt:0.43.0-xbt8`, or native. Guide (Spanish): **[kilombino.com/joinblaket](https://kilombino.com/joinblaket/)** · details in [XBT.md](XBT.md) · tutorials [Linux](TUTORIAL-LINUX-ES.md), [StartOS](TUTORIAL-STARTOS-ES.md), [Umbrel](TUTORIAL-UMBREL-ES.md).

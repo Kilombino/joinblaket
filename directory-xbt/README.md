@@ -10,7 +10,7 @@ This folder lets **any volunteer run a second JoinBlaket directory** at home, on
 
 JoinBlaket is JoinMarket for BTC (the BLAKE2b chain). To make a CoinJoin, the people who offer liquidity (*makers*) and the people who use it (*takers*) have to find each other. The **directory** is the meeting point: a notice board at a Tor `.onion` address where makers post their offers and takers read them and message them.
 
-Today there is only **one** directory, Kilombino's. If it goes down, nobody finds anybody and there are no CoinJoins. With a second directory, run by someone else in another place, the market keeps working when one of them fails, and nobody is indispensable.
+At first there was only **one** directory, Kilombino's: if it went down, nobody found anybody and there were no CoinJoins. Since 0.43.0-xbt9 there are **three** (Kilombino's and two run by trusted operators), and the market keeps working when one of them fails. The more the better: nobody is indispensable.
 
 ## What a directory can and CANNOT do
 
